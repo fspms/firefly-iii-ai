@@ -57,7 +57,7 @@ export default class OpenAiService {
             content: prompt
           }
         ],
-        max_tokens: 100,
+        max_tokens: 150,
       });
 
       let guess = response.choices[0].message.content;
@@ -132,8 +132,8 @@ ${languageConfig.accountsList}
       return {
         prompt: "I want to categorize transactions on my bank account.",
         instruction: autoDestinationAccount 
-          ? "Respond ONLY in the format 'Category|Account' (e.g., 'Food|Intermarché'). For the account name, use only the company/merchant/entity name (e.g., 'Amazon', 'Generali', 'McDonald's'), not the category + company name."
-          : "Just output the name of the category. Does not have to be a complete sentence. Ignore any long string of numbers or special characters.",
+          ? "Respond ONLY in the following JSON format:\n{\n  \"category\": \"Category name\",\n  \"destinationAccount\": \"Account name\"\n}\nFor the account name, use only the company/merchant/entity name (e.g., 'Amazon', 'Generali', 'McDonald's'), not the category + company name."
+          : "Respond ONLY in the following JSON format:\n{\n  \"category\": \"Category name\"\n}\nJust output the name of the category. Does not have to be a complete sentence. Ignore any long string of numbers or special characters.",
         subjectLanguage: "The subject is in English.",
         question: `In which category would a transaction (${type}) ${destinationTextEN} with the subject "${description}" fall into?`,
         accountInstruction: autoDestinationAccount ? "Also suggest the most appropriate destination account from the list below, or suggest a new account name if none match. Use only the company/merchant name:" : "",
@@ -143,8 +143,8 @@ ${languageConfig.accountsList}
       return {
         prompt: "Je veux catégoriser les transactions de mon compte bancaire.",
         instruction: autoDestinationAccount 
-          ? "Réponds UNIQUEMENT au format 'Catégorie|Compte' (ex: 'Alimentation|Intermarché'). Pour le nom du compte, utilise seulement le nom de l'entreprise/merchant/entité (ex: 'Amazon', 'Generali', 'McDonald's'), pas la catégorie + nom d'entreprise."
-          : "Donne simplement le nom de la catégorie. Pas de phrase complète. Ignore toute longue chaîne de chiffres ou de caractères spéciaux.",
+          ? "Réponds UNIQUEMENT au format JSON suivant:\n{\n  \"category\": \"Nom de la catégorie\",\n  \"destinationAccount\": \"Nom du compte destinataire\"\n}\nPour le nom du compte, utilise seulement le nom de l'entreprise/merchant/entité (ex: 'Amazon', 'Generali', 'McDonald's'), pas la catégorie + nom d'entreprise."
+          : "Réponds UNIQUEMENT au format JSON suivant:\n{\n  \"category\": \"Nom de la catégorie\"\n}\nDonne simplement le nom de la catégorie. Pas de phrase complète. Ignore toute longue chaîne de chiffres ou de caractères spéciaux.",
         subjectLanguage: "Le sujet est en français.",
         question: `Dans quelle catégorie une transaction (${type}) ${destinationText} avec le sujet "${description}" correspond-elle ?`,
         accountInstruction: autoDestinationAccount ? "Suggère aussi le compte destinataire le plus approprié dans la liste ci-dessous, ou suggère un nouveau nom de compte si aucun ne correspond. Utilise seulement le nom de l'entreprise/merchant:" : "",
@@ -154,70 +154,114 @@ ${languageConfig.accountsList}
   }
 
   #parseResponse(response, categories, existingAccounts, autoDestinationAccount) {
-    // Nettoyer la réponse des phrases complètes
-    let cleanResponse = response;
-    
-    // Si la réponse contient des phrases complètes, essayer d'extraire le format attendu
-    if (response.includes('correspond à la catégorie') || response.includes('correspond to the category')) {
-      // Chercher le pattern "catégorie" et "compte"
-      const categoryMatch = response.match(/catégorie[^"]*"([^"]+)"/i) || response.match(/category[^"]*"([^"]+)"/i);
-      const accountMatch = response.match(/compte[^"]*"([^"]+)"/i) || response.match(/account[^"]*"([^"]+)"/i);
+    this.#debugLog("Parsing AI response", { response, autoDestinationAccount });
+
+    try {
+      // Essayer de parser le JSON directement
+      const jsonResponse = JSON.parse(response);
       
-      if (categoryMatch && accountMatch) {
-        cleanResponse = `${categoryMatch[1]}|${accountMatch[1]}`;
-      } else if (categoryMatch) {
-        cleanResponse = categoryMatch[1];
-      }
-    }
-    
-    // Si la réponse est tronquée et contient "|", essayer de la compléter
-    if (cleanResponse.includes('|') && !cleanResponse.endsWith('|') && cleanResponse.split('|').length === 1) {
-      // La réponse semble tronquée, traiter comme une catégorie simple
-      cleanResponse = cleanResponse.split('|')[0];
-    }
-
-    this.#debugLog("Cleaned response", { original: response, cleaned: cleanResponse });
-
-    if (!autoDestinationAccount) {
-      // Mode simple : seulement la catégorie
-      if (categories.indexOf(cleanResponse) === -1) {
+      if (!autoDestinationAccount) {
+        // Mode simple : seulement la catégorie
+        const category = jsonResponse.category;
+        if (categories.indexOf(category) === -1) {
+          return {
+            category: null,
+            suggestedCategory: category
+          };
+        }
         return {
-          category: null,
-          suggestedCategory: cleanResponse
+          category: category
         };
       }
-      return {
-        category: cleanResponse
+
+      // Mode avancé : catégorie et compte destinataire
+      const category = jsonResponse.category;
+      const destinationAccount = jsonResponse.destinationAccount;
+      
+      const result = {
+        category: categories.indexOf(category) !== -1 ? category : null,
+        suggestedCategory: categories.indexOf(category) === -1 ? category : null,
+        destinationAccount: existingAccounts.indexOf(destinationAccount) !== -1 ? destinationAccount : null,
+        suggestedDestinationAccount: existingAccounts.indexOf(destinationAccount) === -1 ? destinationAccount : null
       };
-    }
 
-    // Mode avancé : catégorie et compte destinataire
-    const parts = cleanResponse.split('|');
-    if (parts.length !== 2) {
-      // Si le format n'est pas correct, traiter comme une catégorie simple
-      if (categories.indexOf(cleanResponse) === -1) {
+      return result;
+    } catch (jsonError) {
+      this.#debugLog("JSON parsing failed, trying fallback", { 
+        error: jsonError.message, 
+        response 
+      });
+
+      // Fallback : essayer d'extraire le JSON du texte
+      const jsonMatch = response.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try {
+          const jsonResponse = JSON.parse(jsonMatch[0]);
+          
+          if (!autoDestinationAccount) {
+            const category = jsonResponse.category;
+            if (categories.indexOf(category) === -1) {
+              return {
+                category: null,
+                suggestedCategory: category
+              };
+            }
+            return {
+              category: category
+            };
+          }
+
+          const category = jsonResponse.category;
+          const destinationAccount = jsonResponse.destinationAccount;
+          
+          return {
+            category: categories.indexOf(category) !== -1 ? category : null,
+            suggestedCategory: categories.indexOf(category) === -1 ? category : null,
+            destinationAccount: existingAccounts.indexOf(destinationAccount) !== -1 ? destinationAccount : null,
+            suggestedDestinationAccount: existingAccounts.indexOf(destinationAccount) === -1 ? destinationAccount : null
+          };
+        } catch (fallbackError) {
+          this.#debugLog("Fallback JSON parsing also failed", { 
+            error: fallbackError.message,
+            jsonMatch: jsonMatch[0]
+          });
+        }
+      }
+
+      // Dernier recours : traiter comme du texte simple
+      const cleanResponse = response.trim();
+      
+      if (!autoDestinationAccount) {
+        if (categories.indexOf(cleanResponse) === -1) {
+          return {
+            category: null,
+            suggestedCategory: cleanResponse
+          };
+        }
         return {
-          category: null,
-          suggestedCategory: cleanResponse,
-          destinationAccount: null
+          category: cleanResponse
         };
       }
+
+      // Mode avancé avec texte simple - essayer de séparer par "|"
+      const parts = cleanResponse.split('|');
+      if (parts.length === 2) {
+        const [category, account] = parts.map(part => part.trim());
+        return {
+          category: categories.indexOf(category) !== -1 ? category : null,
+          suggestedCategory: categories.indexOf(category) === -1 ? category : null,
+          destinationAccount: existingAccounts.indexOf(account) !== -1 ? account : null,
+          suggestedDestinationAccount: existingAccounts.indexOf(account) === -1 ? account : null
+        };
+      }
+
+      // Si pas de séparateur, traiter comme une catégorie simple
       return {
-        category: cleanResponse,
+        category: categories.indexOf(cleanResponse) !== -1 ? cleanResponse : null,
+        suggestedCategory: categories.indexOf(cleanResponse) === -1 ? cleanResponse : null,
         destinationAccount: null
       };
     }
-
-    const [category, account] = parts.map(part => part.trim());
-    
-    const result = {
-      category: categories.indexOf(category) !== -1 ? category : null,
-      suggestedCategory: categories.indexOf(category) === -1 ? category : null,
-      destinationAccount: existingAccounts.indexOf(account) !== -1 ? account : null,
-      suggestedDestinationAccount: existingAccounts.indexOf(account) === -1 ? account : null
-    };
-
-    return result;
   }
 }
 
