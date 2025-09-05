@@ -204,7 +204,8 @@ export default class FireflyService {
   async getTransactionsWithTag(tagName, limit = 100) {
     this.#debugLog("Fetching transactions with tag", { tagName, limit });
     
-    const response = await fetch(`${this.#BASE_URL}/api/v1/transactions?limit=${limit}`, {
+    // Récupérer les dernières transactions (les plus récentes en premier)
+    const response = await fetch(`${this.#BASE_URL}/api/v1/transactions?limit=${limit}&order_by=created_at&order_direction=desc`, {
       headers: {
         Authorization: `Bearer ${this.#PERSONAL_TOKEN}`,
       }

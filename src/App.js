@@ -18,6 +18,7 @@ export default class App {
   #DEBUG;
   #TAG_FILTER;
   #TAG_CHECK_INTERVAL;
+  #TAG_LIMIT;
 
   #firefly;
   #aiService;
@@ -39,6 +40,7 @@ export default class App {
     this.#DEBUG = getConfigVariable("DEBUG", "false") === "true";
     this.#TAG_FILTER = getConfigVariable("TAG_FILTER", "");
     this.#TAG_CHECK_INTERVAL = parseInt(getConfigVariable("TAG_CHECK_INTERVAL", "0"));
+    this.#TAG_LIMIT = parseInt(getConfigVariable("TAG_LIMIT", "100"));
   }
 
   #debugLog(message, data = null) {
@@ -100,7 +102,7 @@ export default class App {
       this.#debugLog("Starting periodic tag check");
       
       // Récupérer les transactions avec le tag requis
-      const transactions = await this.#firefly.getTransactionsWithTag(this.#TAG_FILTER);
+      const transactions = await this.#firefly.getTransactionsWithTag(this.#TAG_FILTER, this.#TAG_LIMIT);
       
       if (transactions.length === 0) {
         this.#debugLog("No tagged transactions found during periodic check");
@@ -516,7 +518,7 @@ export default class App {
       this.#debugLog("Starting to process existing transactions", { tagFilter: this.#TAG_FILTER });
       
       // Récupérer les transactions avec le tag requis
-      const transactions = await this.#firefly.getTransactionsWithTag(this.#TAG_FILTER);
+      const transactions = await this.#firefly.getTransactionsWithTag(this.#TAG_FILTER, this.#TAG_LIMIT);
       
       if (transactions.length === 0) {
         console.log(`Aucune transaction trouvée avec le tag "${this.#TAG_FILTER}"`);

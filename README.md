@@ -365,6 +365,7 @@ services:
 | **Auto-Create Accounts** | `CREATE_DESTINATION_ACCOUNTS` | `false` | Allow creation of new destination accounts |
 | **Tag Filtering** | `TAG_FILTER` | - | Only analyze transactions with this tag |
 | **Auto Tag Check** | `TAG_CHECK_INTERVAL` | `0` | Minutes between automatic tag checks (0=disabled) |
+| **Tag Limit** | `TAG_LIMIT` | `100` | Maximum transactions to process per check |
 | **User Interface** | `ENABLE_UI` | `false` | Enable web monitoring interface |
 | **Language** | `LANGUAGE` | `FR` | Set to `EN` for English, `FR` for French |
 
@@ -406,6 +407,7 @@ The application can process existing transactions based on specific tags, allowi
 environment:
   TAG_FILTER: "to-analyze"  # Tag to identify transactions to process
   TAG_CHECK_INTERVAL: "5"   # Check every 5 minutes (0 to disable)
+  TAG_LIMIT: "100"          # Process up to 100 transactions per check
 ```
 
 ### Processing Existing Transactions
@@ -441,6 +443,8 @@ curl -X POST http://categorizer:3000/process-existing
 - **Webhook Independence**: Tag filtering only affects the `/process-existing` endpoint, not webhook processing
 - **New Transactions**: All new transactions via webhook are processed automatically
 - **Tag Required**: The `TAG_FILTER` variable must be set to use the `/process-existing` endpoint
+- **Latest Transactions**: By default, only the 100 most recent transactions are processed per check
+- **Configurable Limit**: Use `TAG_LIMIT` to adjust the maximum number of transactions processed
 
 ## Debug Mode
 
@@ -530,6 +534,7 @@ Debug logs include timestamps and service identification:
 - `DEBUG`: Enable detailed debug logging. `true` or `false` (Default: `false`)
 - `TAG_FILTER`: Only analyze transactions with this specific tag. If empty, all transactions are analyzed. (Default: empty)
 - `TAG_CHECK_INTERVAL`: Interval in minutes for automatic tag checking. Set to 0 to disable. (Default: `0`)
+- `TAG_LIMIT`: Maximum number of transactions to process per tag check. (Default: `100`)
 - `ENABLE_UI`: If the user interface should be enabled. (Default: `false`)
 - `FIREFLY_TAG`: The tag to assign to the processed transactions. (Default: `AI categorized`)
 - `PORT`: The port where the application listens. (Default: `3000`)
