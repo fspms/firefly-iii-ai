@@ -137,6 +137,100 @@ export default class FireflyService {
         console.info(`Nouvelle catégorie créée: ${categoryName} (ID: ${result.data.id})`);
         return result.data.id;
     }
+
+    async getDestinationAccounts() {
+        const response = await fetch(`${this.#BASE_URL}/api/v1/accounts?type=expense`, {
+            headers: {
+                Authorization: `Bearer ${this.#PERSONAL_TOKEN}`,
+            }
+        });
+
+        if (!response.ok) {
+            throw new FireflyException(response.status, response, await response.text())
+        }
+
+        const data = await response.json();
+        const accounts = new Map();
+        data.data.forEach(account => {
+            accounts.set(account.attributes.name, account.id);
+        });
+
+        return accounts;
+    }
+
+    async createDestinationAccount(accountName) {
+        const accountData = {
+            name: accountName,
+            type: "expense",
+            account_role: "defaultAsset"
+        };
+
+        const response = await fetch(`${this.#BASE_URL}/api/v1/accounts`, {
+            method: "POST",
+            headers: {
+                Authorization: `Bearer ${this.#PERSONAL_TOKEN}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify(accountData)
+        });
+
+        if (!response.ok) {
+            throw new FireflyException(response.status, response, await response.text())
+        }
+
+        const result = await response.json();
+        console.info(`Nouveau compte destinataire créé: ${accountName} (ID: ${result.data.id})`);
+        return result.data.id;
+    }
+
+    async setCategoryAndDestination(transactionId, transactions, categoryId, destinationAccountId) {
+        const tag = getConfigVariable("FIREFLY_TAG", "AI categorized");
+
+        const body = {
+            apply_rules: true,
+            fire_webhooks: true,
+            transactions: [],
+        }
+
+        transactions.forEach(transaction => {
+            let tags = transaction.tags;
+            if (!tags) {
+                tags = [];
+            }
+            tags.push(tag);
+
+            const transactionUpdate = {
+                transaction_journal_id: transaction.transaction_journal_id,
+                tags: tags,
+            };
+
+            if (categoryId) {
+                transactionUpdate.category_id = categoryId;
+            }
+
+            if (destinationAccountId) {
+                transactionUpdate.destination_id = destinationAccountId;
+            }
+
+            body.transactions.push(transactionUpdate);
+        })
+
+        const response = await fetch(`${this.#BASE_URL}/api/v1/transactions/${transactionId}`, {
+            method: "PUT",
+            headers: {
+                Authorization: `Bearer ${this.#PERSONAL_TOKEN}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify(body)
+        });
+
+        if (!response.ok) {
+            throw new FireflyException(response.status, response, await response.text())
+        }
+
+        await response.json();
+        console.info("Transaction updated with category and destination account")
+    }
 }
 
 class FireflyException extends Error {

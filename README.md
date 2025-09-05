@@ -133,6 +133,7 @@ services:
     environment:
       FIREFLY_URL: "https://firefly.example.com"
       FIREFLY_PERSONAL_TOKEN: "eyabc123..."
+      WEBHOOK_URL: "http://categorizer:3000/webhook"
       # AI Provider Configuration
       PROVIDER: "openai"  # or "ollama"
       # OpenAI Configuration (if PROVIDER=openai)
@@ -225,6 +226,32 @@ If you prefer to configure the webhook manually:
 
 Now you are ready and every new withdrawal transaction should be automatically categorized by OpenAI.
 
+## Automatic Destination Account Management
+
+The application can now also automatically suggest and create destination accounts for your transactions. This feature works alongside the category classification.
+
+### How it works:
+
+1. **Account Suggestion**: When `AUTO_DESTINATION_ACCOUNT=true`, the AI will analyze the transaction and suggest the most appropriate destination account from your existing expense accounts.
+
+2. **Account Creation**: When `CREATE_DESTINATION_ACCOUNTS=true`, the AI will automatically create new destination accounts if no suitable existing account is found.
+
+3. **Smart Matching**: The AI considers the transaction description, destination name, and existing account names to make intelligent suggestions.
+
+### Configuration:
+
+```yaml
+environment:
+  AUTO_DESTINATION_ACCOUNT: "true"  # Enable destination account suggestions
+  CREATE_DESTINATION_ACCOUNTS: "true"  # Allow creation of new accounts
+```
+
+### Example:
+
+For a transaction from "Amazon" with description "Online purchase", the AI might:
+- Suggest existing account "Online Shopping" if it exists
+- Create a new account "Amazon" if no suitable account exists and `CREATE_DESTINATION_ACCOUNTS=true`
+
 ## Automatic Category Creation
 
 One of the key features of this application is its ability to automatically create new categories when none of the existing ones match the transaction.
@@ -286,6 +313,8 @@ If you have to run the application on a different port than the default port `30
 ### General Configuration
 - `LANGUAGE`: The language for category generation. `FR` for French (default), `EN` for English. (optional)
 - `WEBHOOK_URL`: The URL where the webhook will be created. Example: `https://your-domain.com:3000/webhook`. (optional, enables automatic webhook creation)
+- `AUTO_DESTINATION_ACCOUNT`: Whether to automatically suggest destination accounts. `true` or `false` (Default: `false`)
+- `CREATE_DESTINATION_ACCOUNTS`: Whether to automatically create new destination accounts if they don't exist. `true` or `false` (Default: `false`)
 - `ENABLE_UI`: If the user interface should be enabled. (Default: `false`)
 - `FIREFLY_TAG`: The tag to assign to the processed transactions. (Default: `AI categorized`)
 - `PORT`: The port where the application listens. (Default: `3000`)

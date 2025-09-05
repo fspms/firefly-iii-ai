@@ -17,13 +17,15 @@ export default class OpenAiService {
     this.#openAi = new OpenAIApi(configuration);
   }
 
-  async classify(categories, destinationName, description, type) {
+  async classify(categories, destinationName, description, type, existingAccounts = [], autoDestinationAccount = false) {
     try {
       const prompt = this.#generatePrompt(
         categories,
         destinationName,
         description,
-        type
+        type,
+        existingAccounts,
+        autoDestinationAccount
       );
 
       const response = await this.#openAi.createChatCompletion({
@@ -34,30 +36,20 @@ export default class OpenAiService {
             content: prompt
           }
         ],
-        max_tokens: 10,
+        max_tokens: 50,
       });
 
       let guess = response.data.choices[0].message.content;
       guess = guess.replace("\n", "");
       guess = guess.trim();
 
-      if (categories.indexOf(guess) === -1) {
-        console.warn(`OpenAI could not classify the transaction. 
-                Prompt: ${prompt}
-                OpenAIs guess: ${guess}
-                Available categories: ${categories.join(", ")}`);
-        return {
-          prompt,
-          response: response.data.choices[0].message.content,
-          category: null,
-          suggestedCategory: guess, // Retourner la catégorie suggérée pour création
-        };
-      }
+      // Parse the response to extract category and destination account
+      const result = this.#parseResponse(guess, categories, existingAccounts, autoDestinationAccount);
 
       return {
         prompt,
         response: response.data.choices[0].message.content,
-        category: guess,
+        ...result
       };
     } catch (error) {
       if (error.response) {
@@ -75,10 +67,10 @@ export default class OpenAiService {
     }
   }
 
-  #generatePrompt(categories, destinationName, description, type) {
-    const languageConfig = this.#getLanguageConfig(destinationName, description, type);
+  #generatePrompt(categories, destinationName, description, type, existingAccounts = [], autoDestinationAccount = false) {
+    const languageConfig = this.#getLanguageConfig(destinationName, description, type, existingAccounts, autoDestinationAccount);
     
-    return `
+    let prompt = `
 ${languageConfig.prompt}
 ${languageConfig.instruction}
 ${languageConfig.subjectLanguage}
@@ -87,24 +79,85 @@ The categories are:
 
 ${categories.join(", ")}
 `;
+
+    if (autoDestinationAccount && existingAccounts.length > 0) {
+      prompt += `
+
+${languageConfig.accountInstruction}
+${languageConfig.accountsList}
+`;
+    }
+
+    return prompt;
   }
 
-  #getLanguageConfig(destinationName, description, type) {
+  #getLanguageConfig(destinationName, description, type, existingAccounts = [], autoDestinationAccount = false) {
     if (this.#language === "EN") {
       return {
         prompt: "I want to categorize transactions on my bank account.",
-        instruction: "Just output the name of the category. Does not have to be a complete sentence. Ignore any long string of numbers or special characters.",
+        instruction: autoDestinationAccount 
+          ? "Output the category name and destination account name separated by '|'. Format: 'Category|Account'. If no suitable account exists, suggest a new account name."
+          : "Just output the name of the category. Does not have to be a complete sentence. Ignore any long string of numbers or special characters.",
         subjectLanguage: "The subject is in English.",
-        question: `In which category would a transaction (${type}) from "${destinationName}" with the subject "${description}" fall into?`
+        question: `In which category would a transaction (${type}) from "${destinationName}" with the subject "${description}" fall into?`,
+        accountInstruction: autoDestinationAccount ? "Also suggest the most appropriate destination account from the list below, or suggest a new account name if none match:" : "",
+        accountsList: autoDestinationAccount ? existingAccounts.join(", ") : ""
       };
     } else { // FR (default)
       return {
         prompt: "Je veux catégoriser les transactions de mon compte bancaire.",
-        instruction: "Donne simplement le nom de la catégorie. Pas de phrase complète. Ignore toute longue chaîne de chiffres ou de caractères spéciaux.",
+        instruction: autoDestinationAccount 
+          ? "Donne le nom de la catégorie et le nom du compte destinataire séparés par '|'. Format: 'Catégorie|Compte'. Si aucun compte approprié n'existe, suggère un nouveau nom de compte."
+          : "Donne simplement le nom de la catégorie. Pas de phrase complète. Ignore toute longue chaîne de chiffres ou de caractères spéciaux.",
         subjectLanguage: "Le sujet est en français.",
-        question: `Dans quelle catégorie une transaction (${type}) de "${destinationName}" avec le sujet "${description}" correspond-elle ?`
+        question: `Dans quelle catégorie une transaction (${type}) de "${destinationName}" avec le sujet "${description}" correspond-elle ?`,
+        accountInstruction: autoDestinationAccount ? "Suggère aussi le compte destinataire le plus approprié dans la liste ci-dessous, ou suggère un nouveau nom de compte si aucun ne correspond:" : "",
+        accountsList: autoDestinationAccount ? existingAccounts.join(", ") : ""
       };
     }
+  }
+
+  #parseResponse(response, categories, existingAccounts, autoDestinationAccount) {
+    if (!autoDestinationAccount) {
+      // Mode simple : seulement la catégorie
+      if (categories.indexOf(response) === -1) {
+        return {
+          category: null,
+          suggestedCategory: response
+        };
+      }
+      return {
+        category: response
+      };
+    }
+
+    // Mode avancé : catégorie et compte destinataire
+    const parts = response.split('|');
+    if (parts.length !== 2) {
+      // Si le format n'est pas correct, traiter comme une catégorie simple
+      if (categories.indexOf(response) === -1) {
+        return {
+          category: null,
+          suggestedCategory: response,
+          destinationAccount: null
+        };
+      }
+      return {
+        category: response,
+        destinationAccount: null
+      };
+    }
+
+    const [category, account] = parts.map(part => part.trim());
+    
+    const result = {
+      category: categories.indexOf(category) !== -1 ? category : null,
+      suggestedCategory: categories.indexOf(category) === -1 ? category : null,
+      destinationAccount: existingAccounts.indexOf(account) !== -1 ? account : null,
+      suggestedDestinationAccount: existingAccounts.indexOf(account) === -1 ? account : null
+    };
+
+    return result;
   }
 }
 
