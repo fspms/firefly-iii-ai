@@ -209,8 +209,14 @@ export default class App {
     const description = req.body.content.transactions[0].description;
     const type = req.body.content.transactions[0].type;
 
+    // Si le destination_name est "(unknown destination account)", on ne l'utilise pas
+    const hasValidDestination = destinationName && destinationName !== "(unknown destination account)";
+    const effectiveDestinationName = hasValidDestination ? destinationName : null;
+
     this.#debugLog("Processing transaction", {
       destinationName,
+      effectiveDestinationName,
+      hasValidDestination,
       description,
       type,
       transactionId: req.body.content.id,
@@ -250,7 +256,7 @@ export default class App {
 
         const classificationResult = await this.#aiService.classify(
           Array.from(categories.keys()),
-          destinationName,
+          effectiveDestinationName,
           description,
           type,
           Array.from(destinationAccounts.keys()),
