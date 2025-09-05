@@ -423,12 +423,6 @@ Debug logs include timestamps and service identification:
 [DEBUG 2024-01-15T10:30:45.125Z] Data: {"categories": ["Food", "Transport"]}
 ```
 
-### Use Cases for Debug Mode
-
-- **Troubleshooting**: Identify issues with AI classification or API calls
-- **Development**: Monitor application behavior during development
-- **Monitoring**: Track application performance and AI decision-making
-- **Support**: Provide detailed logs when reporting issues
 
 ## Use Cases and Benefits
 
