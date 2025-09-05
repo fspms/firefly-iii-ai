@@ -258,8 +258,8 @@ export default class FireflyService {
   async getTransactionsWithTag(tagName, limit = 100) {
     this.#debugLog("Fetching transactions with tag", { tagName, limit });
     
-    // Récupérer les dernières transactions (les plus récentes en premier)
-    const response = await fetch(`${this.#BASE_URL}/api/v1/transactions?limit=${limit}&order_by=created_at&order_direction=desc`, {
+    // Récupérer les dernières transactions (les plus récentes en premier) avec les tags
+    const response = await fetch(`${this.#BASE_URL}/api/v1/transactions?limit=${limit}&order_by=created_at&order_direction=desc&include=tags`, {
       headers: {
         Authorization: `Bearer ${this.#PERSONAL_TOKEN}`,
       }
@@ -272,12 +272,35 @@ export default class FireflyService {
     }
 
     const data = await response.json();
-    this.#debugLog("Transactions API response", { data });
+    this.#debugLog("Transactions API response", { 
+      totalTransactions: data.data.length,
+      firstTransaction: data.data[0] ? {
+        id: data.data[0].id,
+        attributes: data.data[0].attributes
+      } : null
+    });
 
     // Filtrer les transactions qui ont le tag requis
     const filteredTransactions = data.data.filter(transaction => {
-      const tags = transaction.attributes.tags || [];
-      return tags.some(tag => tag.name === tagName);
+      // Vérifier différentes structures possibles pour les tags
+      const tags1 = transaction.attributes.tags || [];
+      const tags2 = transaction.tags || [];
+      const tags3 = transaction.attributes.transactions?.[0]?.tags || [];
+      
+      this.#debugLog("Checking transaction tags", {
+        transactionId: transaction.id,
+        tags1: tags1.map(t => t.name || t),
+        tags2: tags2.map(t => t.name || t),
+        tags3: tags3.map(t => t.name || t),
+        lookingFor: tagName,
+        hasTag1: tags1.some(tag => (tag.name || tag) === tagName),
+        hasTag2: tags2.some(tag => (tag.name || tag) === tagName),
+        hasTag3: tags3.some(tag => (tag.name || tag) === tagName)
+      });
+      
+      return tags1.some(tag => (tag.name || tag) === tagName) ||
+             tags2.some(tag => (tag.name || tag) === tagName) ||
+             tags3.some(tag => (tag.name || tag) === tagName);
     });
 
     this.#debugLog("Filtered transactions", { 
