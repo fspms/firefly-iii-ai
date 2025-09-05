@@ -1,4 +1,4 @@
-import { Configuration, OpenAIApi } from "openai";
+import OpenAI from "openai";
 import { getConfigVariable } from "./util.js";
 
 export default class OpenAiService {
@@ -12,11 +12,9 @@ export default class OpenAiService {
     this.#language = language;
     this.#DEBUG = getConfigVariable("DEBUG", "false") === "true";
 
-    const configuration = new Configuration({
+    this.#openAi = new OpenAI({
       apiKey,
     });
-
-    this.#openAi = new OpenAIApi(configuration);
   }
 
   #debugLog(message, data = null) {
@@ -51,7 +49,7 @@ export default class OpenAiService {
 
       this.#debugLog("Generated prompt", { prompt });
 
-      const response = await this.#openAi.createChatCompletion({
+      const response = await this.#openAi.chat.completions.create({
         model: this.#model,
         messages: [
           {
@@ -62,7 +60,7 @@ export default class OpenAiService {
         max_tokens: 100,
       });
 
-      let guess = response.data.choices[0].message.content;
+      let guess = response.choices[0].message.content;
       guess = guess.replace("\n", "");
       guess = guess.trim();
 
@@ -75,7 +73,7 @@ export default class OpenAiService {
 
       return {
         prompt,
-        response: response.data.choices[0].message.content,
+        response: response.choices[0].message.content,
         ...result
       };
     } catch (error) {
