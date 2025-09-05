@@ -198,10 +198,43 @@ export default class FireflyService {
 
         const result = await response.json();
         console.info(`Nouveau compte destinataire créé: ${accountName} (ID: ${result.data.id})`);
-        return result.data.id;
+            return result.data.id;
+  }
+
+  async getTransactionsWithTag(tagName, limit = 100) {
+    this.#debugLog("Fetching transactions with tag", { tagName, limit });
+    
+    const response = await fetch(`${this.#BASE_URL}/api/v1/transactions?limit=${limit}`, {
+      headers: {
+        Authorization: `Bearer ${this.#PERSONAL_TOKEN}`,
+      }
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      this.#debugLog("Error fetching transactions", { status: response.status, error: errorText });
+      throw new FireflyException(response.status, response, errorText);
     }
 
-    async setCategoryAndDestination(transactionId, transactions, categoryId, destinationAccountId) {
+    const data = await response.json();
+    this.#debugLog("Transactions API response", { data });
+
+    // Filtrer les transactions qui ont le tag requis
+    const filteredTransactions = data.data.filter(transaction => {
+      const tags = transaction.attributes.tags || [];
+      return tags.some(tag => tag.name === tagName);
+    });
+
+    this.#debugLog("Filtered transactions", { 
+      total: data.data.length, 
+      filtered: filteredTransactions.length,
+      tagName 
+    });
+
+    return filteredTransactions;
+  }
+
+  async setCategoryAndDestination(transactionId, transactions, categoryId, destinationAccountId) {
         const tag = getConfigVariable("FIREFLY_TAG", "AI categorized");
 
         const body = {

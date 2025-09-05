@@ -363,6 +363,8 @@ services:
 | **Webhook Auto-Setup** | `WEBHOOK_URL` | - | Set to enable automatic webhook creation |
 | **Destination Accounts** | `AUTO_DESTINATION_ACCOUNT` | `false` | Enable AI destination account suggestions |
 | **Auto-Create Accounts** | `CREATE_DESTINATION_ACCOUNTS` | `false` | Allow creation of new destination accounts |
+| **Tag Filtering** | `TAG_FILTER` | - | Only analyze transactions with this tag |
+| **Auto Tag Check** | `TAG_CHECK_INTERVAL` | `0` | Minutes between automatic tag checks (0=disabled) |
 | **User Interface** | `ENABLE_UI` | `false` | Enable web monitoring interface |
 | **Language** | `LANGUAGE` | `FR` | Set to `EN` for English, `FR` for French |
 
@@ -387,6 +389,58 @@ You can configure the name of this tag by setting the environment variable `FIRE
 ## Running on a different port
 
 If you have to run the application on a different port than the default port `3000` set the environment variable `PORT`.
+
+## Tag Filtering for Existing Transactions
+
+The application can process existing transactions based on specific tags, allowing you to analyze a backlog of transactions that haven't been processed by the AI yet.
+
+### How Tag Filtering Works
+
+1. **Webhook Processing**: New transactions via webhook are always processed (no tag filtering)
+2. **Existing Transactions**: Use the `/process-existing` endpoint to process transactions with a specific tag
+3. **Tag-Based Selection**: Only transactions with the specified tag will be analyzed
+
+### Configuration
+
+```yaml
+environment:
+  TAG_FILTER: "to-analyze"  # Tag to identify transactions to process
+  TAG_CHECK_INTERVAL: "5"   # Check every 5 minutes (0 to disable)
+```
+
+### Processing Existing Transactions
+
+**Automatic Processing:**
+- Set `TAG_CHECK_INTERVAL` to a value > 0 to enable automatic checking
+- The application will check for tagged transactions at the specified interval
+- First check happens immediately when the application starts
+
+**Manual Processing:**
+To process existing transactions manually, make a POST request to the `/process-existing` endpoint:
+
+```bash
+curl -X POST http://categorizer:3000/process-existing
+```
+
+### Use Cases
+
+- **Backlog Processing**: Process old transactions that were created before the AI system
+- **Selective Analysis**: Analyze only specific types of transactions
+- **Testing**: Test the AI on a subset of transactions before full deployment
+- **Batch Processing**: Process transactions in batches by tagging them
+
+### Example Workflow
+
+1. **Tag Transactions**: In Firefly III, add the tag "to-analyze" to transactions you want processed
+2. **Configure Filter**: Set `TAG_FILTER=to-analyze` in your environment
+3. **Process Existing**: Call the `/process-existing` endpoint to analyze tagged transactions
+4. **Remove Tags**: After processing, you can remove the tags if desired
+
+### Important Notes
+
+- **Webhook Independence**: Tag filtering only affects the `/process-existing` endpoint, not webhook processing
+- **New Transactions**: All new transactions via webhook are processed automatically
+- **Tag Required**: The `TAG_FILTER` variable must be set to use the `/process-existing` endpoint
 
 ## Debug Mode
 
@@ -474,6 +528,8 @@ Debug logs include timestamps and service identification:
 - `AUTO_DESTINATION_ACCOUNT`: Whether to automatically suggest destination accounts. `true` or `false` (Default: `false`)
 - `CREATE_DESTINATION_ACCOUNTS`: Whether to automatically create new destination accounts if they don't exist. `true` or `false` (Default: `false`)
 - `DEBUG`: Enable detailed debug logging. `true` or `false` (Default: `false`)
+- `TAG_FILTER`: Only analyze transactions with this specific tag. If empty, all transactions are analyzed. (Default: empty)
+- `TAG_CHECK_INTERVAL`: Interval in minutes for automatic tag checking. Set to 0 to disable. (Default: `0`)
 - `ENABLE_UI`: If the user interface should be enabled. (Default: `false`)
 - `FIREFLY_TAG`: The tag to assign to the processed transactions. (Default: `AI categorized`)
 - `PORT`: The port where the application listens. (Default: `3000`)
