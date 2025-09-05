@@ -202,7 +202,7 @@ version: '3.3'
 
 services:
   categorizer:
-    image: ghcr.io/bahuma20/firefly-iii-ai-categorize:latest
+    image: ghcr.io/fspms/firefly-iii-ai:latest
     restart: always
     ports:
       - "3000:3000"
@@ -326,7 +326,7 @@ version: '3.3'
 
 services:
   firefly-iii-ai:
-    image: ghcr.io/bahuma20/firefly-iii-ai-categorize:latest
+    image: ghcr.io/fspms/firefly-iii-ai:latest
     restart: always
     ports:
       - "3000:3000"

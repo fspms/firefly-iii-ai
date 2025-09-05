@@ -1,20 +1,42 @@
 {
-  "name": "firefly-iii-ai-categorize",
-  "version": "1.0.0",
-  "description": "",
+  "name": "firefly-iii-ai",
+  "version": "2.0.0",
+  "description": "AI-powered transaction categorization for Firefly III with automatic webhook setup, destination account management, and tag-based filtering",
   "type": "module",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
+    "dev": "node --watch index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
+  "keywords": [
+    "firefly-iii",
+    "ai",
+    "categorization",
+    "openai",
+    "ollama",
+    "personal-finance",
+    "accounting",
+    "automation"
+  ],
   "author": "",
   "license": "ISC",
   "dependencies": {
     "express": "^4.18.2",
-    "openai": "^3.2.1",
+    "openai": "^4.0.0",
     "queue": "^7.0.0",
     "socket.io": "^4.6.1",
     "uuid": "^9.0.0"
-  }
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/fspms/firefly-iii-ai.git"
+  },
+  "bugs": {
+    "url": "https://github.com/fspms/firefly-iii-ai/issues"
+  },
+  "homepage": "https://github.com/fspms/firefly-iii-ai#readme"
 }
