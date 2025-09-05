@@ -198,7 +198,61 @@ export default class FireflyService {
 
         const result = await response.json();
         console.info(`Nouveau compte destinataire créé: ${accountName} (ID: ${result.data.id})`);
-            return result.data.id;
+        return result.data.id;
+  }
+
+  async removeTagFromTransaction(transactionId, tagName) {
+    this.#debugLog("Removing tag from transaction", { transactionId, tagName });
+    
+    // Récupérer d'abord la transaction pour obtenir les tags actuels
+    const response = await fetch(`${this.#BASE_URL}/api/v1/transactions/${transactionId}`, {
+      headers: {
+        Authorization: `Bearer ${this.#PERSONAL_TOKEN}`,
+      }
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      this.#debugLog("Error fetching transaction for tag removal", { status: response.status, error: errorText });
+      throw new FireflyException(response.status, response, errorText);
+    }
+
+    const data = await response.json();
+    const currentTags = data.data.attributes.tags || [];
+    
+    // Filtrer le tag à supprimer
+    const updatedTags = currentTags.filter(tag => tag.name !== tagName);
+    
+    this.#debugLog("Updated tags after removal", { 
+      originalTags: currentTags.map(t => t.name), 
+      updatedTags: updatedTags.map(t => t.name) 
+    });
+
+    // Mettre à jour la transaction avec les nouveaux tags
+    const updateResponse = await fetch(`${this.#BASE_URL}/api/v1/transactions/${transactionId}`, {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${this.#PERSONAL_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        apply_rules: true,
+        fire_webhooks: false, // Ne pas déclencher de webhook pour cette modification
+        transactions: [{
+          transaction_journal_id: data.data.attributes.transactions[0].transaction_journal_id,
+          tags: updatedTags
+        }]
+      })
+    });
+
+    if (!updateResponse.ok) {
+      const errorText = await updateResponse.text();
+      this.#debugLog("Error removing tag from transaction", { status: updateResponse.status, error: errorText });
+      throw new FireflyException(updateResponse.status, updateResponse, errorText);
+    }
+
+    console.info(`Tag "${tagName}" supprimé de la transaction ${transactionId}`);
+    this.#debugLog("Tag successfully removed", { transactionId, tagName });
   }
 
   async getTransactionsWithTag(tagName, limit = 100) {

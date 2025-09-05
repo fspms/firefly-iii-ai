@@ -634,6 +634,24 @@ export default class App {
         console.log(`Transaction ${transaction.id} mise à jour avec succès`);
       }
 
+      // Supprimer le tag après traitement pour éviter les boucles
+      if (this.#TAG_FILTER) {
+        try {
+          await this.#firefly.removeTagFromTransaction(transaction.id, this.#TAG_FILTER);
+          this.#debugLog("Tag removed after processing", { 
+            transactionId: transaction.id, 
+            tagName: this.#TAG_FILTER 
+          });
+        } catch (error) {
+          console.error(`Erreur lors de la suppression du tag de la transaction ${transaction.id}:`, error);
+          this.#debugLog("Tag removal error", {
+            transactionId: transaction.id,
+            tagName: this.#TAG_FILTER,
+            error: error.message
+          });
+        }
+      }
+
     } catch (error) {
       console.error(`Erreur lors du traitement de la transaction ${transaction.id}:`, error);
       this.#debugLog("Single transaction processing error", {

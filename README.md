@@ -436,7 +436,7 @@ curl -X POST http://categorizer:3000/process-existing
 1. **Tag Transactions**: In Firefly III, add the tag "to-analyze" to transactions you want processed
 2. **Configure Filter**: Set `TAG_FILTER=to-analyze` in your environment
 3. **Process Existing**: Call the `/process-existing` endpoint to analyze tagged transactions
-4. **Remove Tags**: After processing, you can remove the tags if desired
+4. **Automatic Cleanup**: Tags are automatically removed after successful processing
 
 ### Important Notes
 
@@ -445,6 +445,7 @@ curl -X POST http://categorizer:3000/process-existing
 - **Tag Required**: The `TAG_FILTER` variable must be set to use the `/process-existing` endpoint
 - **Latest Transactions**: By default, only the 100 most recent transactions are processed per check
 - **Configurable Limit**: Use `TAG_LIMIT` to adjust the maximum number of transactions processed
+- **Automatic Tag Removal**: The processing tag is automatically removed after successful processing to prevent loops
 
 ## Debug Mode
 
