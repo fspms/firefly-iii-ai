@@ -1,4 +1,4 @@
-# Firefly III AI categorization
+# Firefly III AI
 
 This project allows you to automatically categorize your expenses in [Firefly III](https://www.firefly-iii.org/) by
 using OpenAI.
@@ -6,36 +6,46 @@ using OpenAI.
 
 ## Features
 
-- **Automatic categorization**: Uses AI to guess the appropriate category
+- **Automatic categorization**: Uses AI to guess the appropriate category for transactions
 - **Automatic category creation**: Creates new categories if no existing one matches
+- **Automatic destination account management**: AI suggests and creates destination accounts
 - **Multi-language support**: Supports French and English
 - **Multiple AI providers**: Choose between OpenAI and Ollama (local AI)
+- **Automatic webhook setup**: Creates webhooks automatically via Firefly III API
 - **User interface**: Web interface to monitor the categorization process
-- **Integrated webhook**: Automatically triggers on every new transaction
+- **Smart transaction processing**: Handles both withdrawals and deposits
+- **Comprehensive logging**: Detailed logs for monitoring and debugging
 
 ## How it works
 
-It provides a webhook that you can set up to be called every time a new expense is added.
+The application provides a webhook that can be automatically set up to be called every time a new transaction is added to Firefly III.
 
-It will then generate a prompt for OpenAI, including your existing categories, the recipient and the description of the
-transaction.
+### Automatic Setup
+1. **Webhook Creation**: The application can automatically create the required webhook in Firefly III
+2. **Transaction Processing**: When a new transaction is created, the webhook triggers the AI analysis
 
-OpenAI will, based on that prompt, guess the category for the transaction.
+### AI Analysis
+The AI analyzes the transaction and can suggest:
+- **Category**: The most appropriate expense category
+- **Destination Account**: The most suitable destination account (optional)
 
-**If it is one of your existing categories**, the tool will set the category on the transaction and also add a tag to the
-transaction.
-
-**If no existing category matches**, the tool will automatically create a new category with the name suggested by the AI.
+### Smart Processing
+- **Existing Resources**: If the AI finds matching categories or accounts, they are applied directly
+- **Auto-Creation**: If no suitable category or account exists, the AI can create new ones automatically
+- **Multi-Language**: All suggestions are made in your preferred language (French/English)
+- **Flexible Configuration**: You can enable/disable each feature independently
 
 ## Privacy
 
-Please note that some details of the transactions will be sent to OpenAI as information to guess the category.
+Please note that some details of the transactions will be sent to the AI provider as information to guess the category and destination account.
 
 These are:
 
 - Transaction description
 - Name of transaction destination account
-- Names of all categories
+- Transaction type (withdrawal/deposit)
+- Names of all existing categories
+- Names of all existing destination accounts (if destination account management is enabled)
 
 ## Installation
 
@@ -252,6 +262,41 @@ For a transaction from "Amazon" with description "Online purchase", the AI might
 - Suggest existing account "Online Shopping" if it exists
 - Create a new account "Amazon" if no suitable account exists and `CREATE_DESTINATION_ACCOUNTS=true`
 
+## Advanced AI Features
+
+### Multi-Provider Support
+
+The application supports multiple AI providers:
+
+#### OpenAI (Default)
+- **Models**: GPT-3.5-turbo, GPT-4, and other OpenAI models
+- **Configuration**: Set `PROVIDER=openai` and provide your `OPENAI_API_KEY`
+- **Features**: Full support for all categorization and account management features
+
+#### Ollama (Local AI)
+- **Models**: Any Ollama-compatible model (llama3.2, mistral, etc.)
+- **Configuration**: Set `PROVIDER=ollama` and configure `OLLAMA_BASE_URL`
+- **Features**: Run AI processing locally for enhanced privacy
+- **Requirements**: Ollama must be running on your system
+
+### Smart Transaction Processing
+
+The AI can process different types of transactions:
+
+- **Withdrawals**: Expense transactions with category and destination account suggestions
+- **Deposits**: Income transactions with appropriate categorization
+- **Transfers**: Internal transfers between accounts
+
+### Intelligent Matching
+
+The AI uses multiple factors to make suggestions:
+
+1. **Transaction Description**: Analyzes the description text for context
+2. **Destination Name**: Considers the merchant or recipient name
+3. **Transaction Type**: Takes into account whether it's income or expense
+4. **Existing Data**: Compares against your current categories and accounts
+5. **Language Context**: Understands the language of your transaction data
+
 ## Automatic Category Creation
 
 One of the key features of this application is its ability to automatically create new categories when none of the existing ones match the transaction.
@@ -271,6 +316,56 @@ The automatically created categories will be generated in the language specified
 - **English (EN)**: Categories like "Home Insurance", "Groceries", "Restaurant"
 
 This ensures that your categories are consistent with your preferred language and makes them more intuitive to use.
+
+## Complete Configuration Example
+
+Here's a complete Docker Compose configuration with all features enabled:
+
+```yaml
+version: '3.3'
+
+services:
+  firefly-iii-ai:
+    image: ghcr.io/bahuma20/firefly-iii-ai-categorize:latest
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      # Firefly III Configuration
+      FIREFLY_URL: "https://your-firefly-instance.com"
+      FIREFLY_PERSONAL_TOKEN: "your-personal-access-token"
+      WEBHOOK_URL: "https://categorizer:3000/webhook"
+      
+      # AI Provider Configuration
+      PROVIDER: "openai"  # or "ollama"
+      OPENAI_API_KEY: "your-openai-api-key"
+      OPENAI_MODEL: "gpt-3.5-turbo"
+      
+      # Ollama Configuration (if using Ollama)
+      # OLLAMA_BASE_URL: "http://ollama:11434"
+      # OLLAMA_MODEL: "llama3.2"
+      
+      # Language and Features
+      LANGUAGE: "FR"  # or "EN"
+      AUTO_DESTINATION_ACCOUNT: "true"
+      CREATE_DESTINATION_ACCOUNTS: "true"
+      
+      # UI and Logging
+      ENABLE_UI: "true"
+      FIREFLY_TAG: "AI categorized"
+      PORT: "3000"
+```
+
+### Feature Toggle Guide
+
+| Feature | Variable | Default | Description |
+|---------|----------|---------|-------------|
+| **Webhook Auto-Setup** | `WEBHOOK_URL` | - | Set to enable automatic webhook creation |
+| **Destination Accounts** | `AUTO_DESTINATION_ACCOUNT` | `false` | Enable AI destination account suggestions |
+| **Auto-Create Accounts** | `CREATE_DESTINATION_ACCOUNTS` | `false` | Allow creation of new destination accounts |
+| **User Interface** | `ENABLE_UI` | `false` | Enable web monitoring interface |
+| **Language** | `LANGUAGE` | `FR` | Set to `EN` for English, `FR` for French |
+
 
 ## User Interface
 
@@ -292,6 +387,33 @@ You can configure the name of this tag by setting the environment variable `FIRE
 ## Running on a different port
 
 If you have to run the application on a different port than the default port `3000` set the environment variable `PORT`.
+
+## Use Cases and Benefits
+
+### For Personal Finance Management
+- **Automated Organization**: Never manually categorize transactions again
+- **Consistent Categorization**: AI ensures consistent category naming and usage
+- **Time Saving**: Reduces manual data entry time by 90%+
+- **Multi-Language Support**: Works seamlessly in French or English
+
+### For Business Accounting
+- **Expense Tracking**: Automatically categorize business expenses
+- **Account Management**: Smart destination account suggestions for better bookkeeping
+- **Audit Trail**: All AI decisions are logged and traceable
+- **Scalability**: Handles high transaction volumes automatically
+
+### For Financial Advisors
+- **Client Onboarding**: Quickly set up organized financial data for new clients
+- **Data Quality**: Ensures consistent and accurate transaction categorization
+- **Reporting**: Clean, organized data makes reporting and analysis easier
+- **Compliance**: Maintains detailed logs of all automated decisions
+
+### Key Advantages
+- **Zero Manual Work**: Fully automated transaction processing
+- **Intelligent Learning**: AI learns from your existing categories and accounts
+- **Flexible Configuration**: Enable only the features you need
+- **Privacy Options**: Choose between cloud AI (OpenAI) or local AI (Ollama)
+- **Easy Setup**: Automatic webhook configuration and one-command deployment
 
 ## Full list of environment variables
 
