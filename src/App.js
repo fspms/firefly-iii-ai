@@ -96,6 +96,9 @@ export default class App {
 
     this.#server.listen(this.#PORT, async () => {
       console.log(`Application running on port ${this.#PORT}`);
+      
+      // Configuration automatique du webhook
+      await this.#setupWebhook();
     });
 
     this.#io.on("connection", (socket) => {
@@ -230,6 +233,38 @@ export default class App {
         throw error; // Re-throw pour que la queue puisse le capturer
       }
     });
+  }
+
+  async #setupWebhook() {
+    try {
+      const webhookUrl = getConfigVariable("WEBHOOK_URL");
+      
+      if (!webhookUrl) {
+        console.warn("⚠️  WEBHOOK_URL non configuré. Configuration manuelle requise.");
+        console.log("Pour configurer automatiquement le webhook, ajoutez la variable d'environnement WEBHOOK_URL");
+        console.log("Exemple: WEBHOOK_URL=https://votre-domaine.com/webhook");
+        return;
+      }
+
+      console.log("🔍 Vérification des webhooks existants...");
+      const existingWebhook = await this.#firefly.checkExistingWebhook(webhookUrl);
+      
+      if (existingWebhook) {
+        console.log("✅ Webhook déjà configuré:", existingWebhook.attributes.title);
+        return;
+      }
+
+      console.log("🚀 Création automatique du webhook...");
+      const webhook = await this.#firefly.createWebhook(webhookUrl);
+      console.log("✅ Webhook créé avec succès!");
+      console.log(`   - ID: ${webhook.id}`);
+      console.log(`   - URL: ${webhook.attributes.url}`);
+      console.log(`   - Statut: ${webhook.attributes.active ? 'Actif' : 'Inactif'}`);
+      
+    } catch (error) {
+      console.error("❌ Erreur lors de la configuration du webhook:", error.message);
+      console.log("💡 Configuration manuelle requise. Consultez le README pour les instructions.");
+    }
   }
 }
 

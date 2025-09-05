@@ -74,6 +74,49 @@ export default class FireflyService {
         console.info("Transaction updated")
     }
 
+    async createWebhook(webhookUrl) {
+        const webhookData = {
+            title: "AI Categorizer",
+            trigger: "STORE_TRANSACTION",
+            response: "TRANSACTIONS", 
+            delivery: "JSON",
+            url: webhookUrl,
+            active: true
+        };
+
+        const response = await fetch(`${this.#BASE_URL}/api/v1/webhooks`, {
+            method: "POST",
+            headers: {
+                Authorization: `Bearer ${this.#PERSONAL_TOKEN}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify(webhookData)
+        });
+
+        if (!response.ok) {
+            throw new FireflyException(response.status, response, await response.text())
+        }
+
+        const result = await response.json();
+        console.info("Webhook créé avec succès:", result.data.id);
+        return result.data;
+    }
+
+    async checkExistingWebhook(webhookUrl) {
+        const response = await fetch(`${this.#BASE_URL}/api/v1/webhooks`, {
+            headers: {
+                Authorization: `Bearer ${this.#PERSONAL_TOKEN}`,
+            }
+        });
+
+        if (!response.ok) {
+            throw new FireflyException(response.status, response, await response.text())
+        }
+
+        const data = await response.json();
+        return data.data.find(webhook => webhook.attributes.url === webhookUrl);
+    }
+
     async createCategory(categoryName) {
         const response = await fetch(`${this.#BASE_URL}/api/v1/categories`, {
             method: "POST",

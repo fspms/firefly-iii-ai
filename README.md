@@ -3,11 +3,6 @@
 This project allows you to automatically categorize your expenses in [Firefly III](https://www.firefly-iii.org/) by
 using OpenAI.
 
-## Please fork me.
-
-Unfortunately i am not able to invest more time into maintaining this project.
-
-Feel free to fork it and create a PR that adds a link to your fork in the README file.
 
 ## Features
 
@@ -131,7 +126,7 @@ version: "3.3"
 
 services:
   categorizer:
-    image: ghcr.io/fspms/firefly-iii-ai-categorize:latest
+    image: ghcr.io/fspms/firefly-iii-ai:latest
     restart: always
     ports:
       - "3000:3000"
@@ -171,7 +166,7 @@ docker run -d \
 -e OPENAI_API_KEY=sk-abc123... \
 -e OPENAI_MODEL=gpt-3.5-turbo \
 -e LANGUAGE=FR \
-ghcr.io/fspms/firefly-iii-ai-categorize:latest
+ghcr.io/fspms/firefly-iii-ai:latest
 
 # Using Ollama (requires Ollama running locally)
 docker run -d \
@@ -182,13 +177,36 @@ docker run -d \
 -e OLLAMA_BASE_URL=http://host.docker.internal:11434 \
 -e OLLAMA_MODEL=llama3.2 \
 -e LANGUAGE=FR \
-ghcr.io/fspms/firefly-iii-ai-categorize:latest
+ghcr.io/fspms/firefly-iii-ai:latest
 ```
 
 ### 6. Set up the webhook
 
-After starting your container, you have to set up the webhook in Firefly that will automatically trigger the
-categorization everytime a new transaction comes in.
+#### Option A: Automatic configuration (Recommended)
+
+The application can now automatically create the webhook via the Firefly III API. Simply add the `WEBHOOK_URL` environment variable:
+
+```yaml
+version: '3.3'
+
+services:
+  categorizer:
+    image: ghcr.io/bahuma20/firefly-iii-ai-categorize:latest
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      FIREFLY_URL: "https://firefly.example.com"
+      FIREFLY_PERSONAL_TOKEN: "eyabc123..."
+      OPENAI_API_KEY: "sk-abc123..."
+      WEBHOOK_URL: "https://your-domain.com/webhook"  # ← New variable
+```
+
+The application will automatically check if a webhook already exists and create it if necessary on startup.
+
+#### Option B: Manual configuration
+
+If you prefer to configure the webhook manually:
 
 - Login to your Firefly instance
 - In the sidebar go to "Automation" > "Webhooks"
@@ -267,8 +285,8 @@ If you have to run the application on a different port than the default port `30
 
 ### General Configuration
 - `LANGUAGE`: The language for category generation. `FR` for French (default), `EN` for English. (optional)
+- `WEBHOOK_URL`: The URL where the webhook will be created. Example: `https://your-domain.com:3000/webhook`. (optional, enables automatic webhook creation)
 - `ENABLE_UI`: If the user interface should be enabled. (Default: `false`)
 - `FIREFLY_TAG`: The tag to assign to the processed transactions. (Default: `AI categorized`)
 - `PORT`: The port where the application listens. (Default: `3000`)
 
-# Trigger
