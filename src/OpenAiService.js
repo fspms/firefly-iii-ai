@@ -134,22 +134,22 @@ ${languageConfig.accountsList}
       return {
         prompt: "I want to categorize transactions on my bank account.",
         instruction: autoDestinationAccount 
-          ? "Output the category name and destination account name separated by '|'. Format: 'Category|Account'. If no suitable account exists, suggest a new account name."
+          ? "Output the category name and destination account name separated by '|'. Format: 'Category|Account'. For the account name, use only the company/merchant/entity name (e.g., 'Amazon', 'Generali', 'McDonald's'), not the category + company name."
           : "Just output the name of the category. Does not have to be a complete sentence. Ignore any long string of numbers or special characters.",
         subjectLanguage: "The subject is in English.",
         question: `In which category would a transaction (${type}) ${destinationTextEN} with the subject "${description}" fall into?`,
-        accountInstruction: autoDestinationAccount ? "Also suggest the most appropriate destination account from the list below, or suggest a new account name if none match:" : "",
+        accountInstruction: autoDestinationAccount ? "Also suggest the most appropriate destination account from the list below, or suggest a new account name if none match. Use only the company/merchant name:" : "",
         accountsList: autoDestinationAccount ? existingAccounts.join(", ") : ""
       };
     } else { // FR (default)
       return {
         prompt: "Je veux catégoriser les transactions de mon compte bancaire.",
         instruction: autoDestinationAccount 
-          ? "Donne le nom de la catégorie et le nom du compte destinataire séparés par '|'. Format: 'Catégorie|Compte'. Si aucun compte approprié n'existe, suggère un nouveau nom de compte."
+          ? "Donne le nom de la catégorie et le nom du compte destinataire séparés par '|'. Format: 'Catégorie|Compte'. Pour le nom du compte, utilise seulement le nom de l'entreprise/merchant/entité (ex: 'Amazon', 'Generali', 'McDonald's'), pas la catégorie + nom d'entreprise."
           : "Donne simplement le nom de la catégorie. Pas de phrase complète. Ignore toute longue chaîne de chiffres ou de caractères spéciaux.",
         subjectLanguage: "Le sujet est en français.",
         question: `Dans quelle catégorie une transaction (${type}) ${destinationText} avec le sujet "${description}" correspond-elle ?`,
-        accountInstruction: autoDestinationAccount ? "Suggère aussi le compte destinataire le plus approprié dans la liste ci-dessous, ou suggère un nouveau nom de compte si aucun ne correspond:" : "",
+        accountInstruction: autoDestinationAccount ? "Suggère aussi le compte destinataire le plus approprié dans la liste ci-dessous, ou suggère un nouveau nom de compte si aucun ne correspond. Utilise seulement le nom de l'entreprise/merchant:" : "",
         accountsList: autoDestinationAccount ? existingAccounts.join(", ") : ""
       };
     }
