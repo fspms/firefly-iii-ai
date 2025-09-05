@@ -50,4 +50,11 @@ export default class JobList {
         job.status = "finished";
         this.#eventEmitter.emit('job updated', {job, jobs: Array.from(this.#jobs.values())});
     }
+
+    setJobError(id, errorMessage) {
+        const job = this.#jobs.get(id);
+        job.status = "error";
+        job.error = errorMessage;
+        this.#eventEmitter.emit('job updated', {job, jobs: Array.from(this.#jobs.values())});
+    }
 }

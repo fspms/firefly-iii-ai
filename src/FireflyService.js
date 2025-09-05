@@ -73,6 +73,27 @@ export default class FireflyService {
         await response.json();
         console.info("Transaction updated")
     }
+
+    async createCategory(categoryName) {
+        const response = await fetch(`${this.#BASE_URL}/api/v1/categories`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${this.#PERSONAL_TOKEN}`,
+            },
+            body: JSON.stringify({
+                name: categoryName,
+            }),
+        });
+
+        if (!response.ok) {
+            throw new FireflyException(response.status, response, await response.text());
+        }
+
+        const result = await response.json();
+        console.info(`Nouvelle catégorie créée: ${categoryName} (ID: ${result.data.id})`);
+        return result.data.id;
+    }
 }
 
 class FireflyException extends Error {

@@ -1,20 +1,12 @@
-import { Configuration, OpenAIApi } from "openai";
-import { getConfigVariable } from "./util.js";
-
-export default class OpenAiService {
-  #openAi;
-  #model = "gpt-3.5-turbo-instruct"; // Using the instruct model
+export default class OllamaService {
+  #baseUrl;
+  #model;
   #language;
 
-  constructor(apiKey, model = "gpt-3.5-turbo-instruct", language = "FR") {
+  constructor(baseUrl = "http://localhost:11434", model = "llama3.2", language = "FR") {
+    this.#baseUrl = baseUrl;
     this.#model = model;
     this.#language = language;
-
-    const configuration = new Configuration({
-      apiKey,
-    });
-
-    this.#openAi = new OpenAIApi(configuration);
   }
 
   async classify(categories, destinationName, description, type) {
@@ -26,29 +18,40 @@ export default class OpenAiService {
         type
       );
 
-      const response = await this.#openAi.createChatCompletion({
-        model: this.#model,
-        messages: [
-          {
-            role: "user",
-            content: prompt
-          }
-        ],
-        max_tokens: 10,
+      const response = await fetch(`${this.#baseUrl}/api/generate`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: this.#model,
+          prompt: prompt,
+          stream: false,
+          options: {
+            temperature: 0.1,
+            top_p: 0.9,
+            max_tokens: 50,
+          },
+        }),
       });
 
-      let guess = response.data.choices[0].message.content;
+      if (!response.ok) {
+        throw new OllamaException(response.status, response, await response.text());
+      }
+
+      const result = await response.json();
+      let guess = result.response;
       guess = guess.replace("\n", "");
       guess = guess.trim();
 
       if (categories.indexOf(guess) === -1) {
-        console.warn(`OpenAI could not classify the transaction. 
+        console.warn(`Ollama could not classify the transaction. 
                 Prompt: ${prompt}
-                OpenAIs guess: ${guess}
+                Ollama's guess: ${guess}
                 Available categories: ${categories.join(", ")}`);
         return {
           prompt,
-          response: response.data.choices[0].message.content,
+          response: result.response,
           category: null,
           suggestedCategory: guess, // Retourner la catégorie suggérée pour création
         };
@@ -56,21 +59,21 @@ export default class OpenAiService {
 
       return {
         prompt,
-        response: response.data.choices[0].message.content,
+        response: result.response,
         category: guess,
       };
     } catch (error) {
       if (error.response) {
         console.error(error.response.status);
         console.error(error.response.data);
-        throw new OpenAiException(
+        throw new OllamaException(
           error.status,
           error.response,
           error.response.data
         );
       } else {
         console.error(error.message);
-        throw new OpenAiException(null, null, error.message);
+        throw new OllamaException(null, null, error.message);
       }
     }
   }
@@ -108,13 +111,13 @@ ${categories.join(", ")}
   }
 }
 
-class OpenAiException extends Error {
+class OllamaException extends Error {
   code;
   response;
   body;
 
   constructor(statusCode, response, body) {
-    super(`Error while communicating with OpenAI: ${statusCode} - ${body}`);
+    super(`Error while communicating with Ollama: ${statusCode} - ${body}`);
 
     this.code = statusCode;
     this.response = response;

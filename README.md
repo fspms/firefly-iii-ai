@@ -3,10 +3,20 @@
 This project allows you to automatically categorize your expenses in [Firefly III](https://www.firefly-iii.org/) by
 using OpenAI.
 
-## Please fork me
-Unfortunately i am not able to invest more time into maintaining this project. 
+## Please fork me.
+
+Unfortunately i am not able to invest more time into maintaining this project.
 
 Feel free to fork it and create a PR that adds a link to your fork in the README file.
+
+## Features
+
+- **Automatic categorization**: Uses AI to guess the appropriate category
+- **Automatic category creation**: Creates new categories if no existing one matches
+- **Multi-language support**: Supports French and English
+- **Multiple AI providers**: Choose between OpenAI and Ollama (local AI)
+- **User interface**: Web interface to monitor the categorization process
+- **Integrated webhook**: Automatically triggers on every new transaction
 
 ## How it works
 
@@ -17,10 +27,10 @@ transaction.
 
 OpenAI will, based on that prompt, guess the category for the transaction.
 
-If it is one of your existing categories, the tool will set the category on the transaction and also add a tag to the
+**If it is one of your existing categories**, the tool will set the category on the transaction and also add a tag to the
 transaction.
 
-If it cannot detect the category, it will not update anything.
+**If no existing category matches**, the tool will automatically create a new category with the name suggested by the AI.
 
 ## Privacy
 
@@ -57,32 +67,87 @@ When an API key is created you'll be able to copy the secret key and use it.
 
 ![OpenAI screenshot](docs/img/openai-key.png)
 
-Note: OpenAI currently provides 5$ free credits for 3 months which is great since you won’t have to provide your
+Note: OpenAI currently provides 5$ free credits for 3 months which is great since you won't have to provide your
 payment details to begin interacting with the API for the first time.
 
 After that you have to enable billing in your account.
 
 Tip: Make sure to set budget limits to prevent suprises at the end of the month.
 
-### 3. Start the application via Docker
+### 3. Choose AI Provider
 
-#### 3.1 Docker Compose
+The application supports two AI providers for categorization:
+
+#### Option A: OpenAI (Cloud-based)
+- **Pros**: High accuracy, no local setup required
+- **Cons**: Requires API key, data sent to external service
+- **Best for**: Users who prioritize accuracy and don't mind cloud processing
+
+#### Option B: Ollama (Local AI)
+- **Pros**: Complete privacy, no API costs, runs locally
+- **Cons**: Requires local setup, higher resource usage
+- **Best for**: Privacy-conscious users, those wanting to avoid API costs
+
+Configure using the `PROVIDER` environment variable:
+- `openai` (default): Use OpenAI API
+- `ollama`: Use local Ollama instance
+
+#### Installing Ollama (if using local AI)
+
+If you choose to use Ollama, you'll need to install it first:
+
+1. **Install Ollama**: Visit [https://ollama.ai](https://ollama.ai) and download the installer for your platform
+2. **Pull a model**: Run `ollama pull llama3.2` (or your preferred model)
+3. **Start Ollama**: The service should start automatically, or run `ollama serve`
+4. **Verify installation**: Test with `curl http://localhost:11434/api/tags`
+
+**Recommended models for categorization:**
+- `llama3.2` (8B parameters) - Good balance of speed and accuracy
+- `llama3.2:13b` (13B parameters) - Higher accuracy, slower
+- `mistral` (7B parameters) - Fast and efficient
+
+**OpenAI models (must be chat models):**
+- `gpt-3.5-turbo` - Fast and cost-effective
+- `gpt-4` - Higher accuracy, more expensive
+- `gpt-4-turbo` - Best balance of speed and accuracy
+
+### 4. Configure Language (Optional)
+
+The application supports multiple languages for category generation. You can configure the language using the `LANGUAGE` environment variable:
+
+- `FR` (default): French - Categories will be generated in French
+- `EN`: English - Categories will be generated in English
+
+This affects both the AI prompts and the automatically created categories.
+
+### 5. Start the application via Docker
+
+#### 5.1 Docker Compose
 
 Create a new file `docker-compose.yml` with this content (or add to existing docker-compose file):
 
 ```yaml
-version: '3.3'
+version: "3.3"
 
 services:
   categorizer:
-    image: ghcr.io/bahuma20/firefly-iii-ai-categorize:latest
+    image: ghcr.io/fspms/firefly-iii-ai-categorize:latest
     restart: always
     ports:
       - "3000:3000"
     environment:
       FIREFLY_URL: "https://firefly.example.com"
       FIREFLY_PERSONAL_TOKEN: "eyabc123..."
+      # AI Provider Configuration
+      PROVIDER: "openai"  # or "ollama"
+      # OpenAI Configuration (if PROVIDER=openai)
       OPENAI_API_KEY: "sk-abc123..."
+      OPENAI_MODEL: "gpt-3.5-turbo"
+      # Ollama Configuration (if PROVIDER=ollama)
+      OLLAMA_BASE_URL: "http://ollama:11434"
+      OLLAMA_MODEL: "llama3.2"
+      # General Configuration
+      LANGUAGE: "FR"  # Optional: FR for French (default), EN for English
 ```
 
 Make sure to set the environment variables correctly.
@@ -91,21 +156,36 @@ Run `docker-compose up -d`.
 
 Now the application is running and accessible at port 3000.
 
-#### 3.2 Manually via Docker
+#### 5.2 Manually via Docker
 
 Run this Docker command to start the application container. Edit the environment variables to match the credentials
 created before.
 
 ```shell
+# Using OpenAI
 docker run -d \
 -p 3000:3000 \
 -e FIREFLY_URL=https://firefly.example.com \
 -e FIREFLY_PERSONAL_TOKEN=eyabc123... \
+-e PROVIDER=openai \
 -e OPENAI_API_KEY=sk-abc123... \
-ghcr.io/bahuma20/firefly-iii-ai-categorize:latest
+-e OPENAI_MODEL=gpt-3.5-turbo \
+-e LANGUAGE=FR \
+ghcr.io/fspms/firefly-iii-ai-categorize:latest
+
+# Using Ollama (requires Ollama running locally)
+docker run -d \
+-p 3000:3000 \
+-e FIREFLY_URL=https://firefly.example.com \
+-e FIREFLY_PERSONAL_TOKEN=eyabc123... \
+-e PROVIDER=ollama \
+-e OLLAMA_BASE_URL=http://host.docker.internal:11434 \
+-e OLLAMA_MODEL=llama3.2 \
+-e LANGUAGE=FR \
+ghcr.io/fspms/firefly-iii-ai-categorize:latest
 ```
 
-### 4. Set up the webhook
+### 6. Set up the webhook
 
 After starting your container, you have to set up the webhook in Firefly that will automatically trigger the
 categorization everytime a new transaction comes in.
@@ -126,6 +206,26 @@ categorization everytime a new transaction comes in.
 ![Step 3](docs/img/webhook3.png)
 
 Now you are ready and every new withdrawal transaction should be automatically categorized by OpenAI.
+
+## Automatic Category Creation
+
+One of the key features of this application is its ability to automatically create new categories when none of the existing ones match the transaction.
+
+### How it works:
+
+1. **Existing category match**: If OpenAI finds a matching existing category, it will be assigned to the transaction
+2. **No match found**: If no existing category matches, the application will:
+   - Create a new category with the name suggested by OpenAI
+   - Assign this new category to the transaction
+   - Add the "AI categorized" tag to the transaction
+
+### Language Support:
+
+The automatically created categories will be generated in the language specified by the `LANGUAGE` environment variable:
+- **French (FR)**: Categories like "Assurance Habitation", "Courses", "Restaurant"
+- **English (EN)**: Categories like "Home Insurance", "Groceries", "Restaurant"
+
+This ensures that your categories are consistent with your preferred language and makes them more intuitive to use.
 
 ## User Interface
 
@@ -150,9 +250,25 @@ If you have to run the application on a different port than the default port `30
 
 ## Full list of environment variables
 
+### Required Variables
 - `FIREFLY_URL`: The URL to your Firefly III instance. Example: `https://firefly.example.com`. (required)
 - `FIREFLY_PERSONAL_TOKEN`: A Firefly III Personal Access Token. (required)
-- `OPENAI_API_KEY`: The OpenAI API Key to authenticate against OpenAI. (required)
+
+### AI Provider Configuration
+- `PROVIDER`: The AI provider to use. `openai` (default) or `ollama`. (optional)
+
+### OpenAI Configuration (if PROVIDER=openai)
+- `OPENAI_API_KEY`: The OpenAI API Key to authenticate against OpenAI. (required if using OpenAI)
+- `OPENAI_MODEL`: The OpenAI model to use. (Default: `gpt-3.5-turbo`) - Must be a chat model
+
+### Ollama Configuration (if PROVIDER=ollama)
+- `OLLAMA_BASE_URL`: The URL to your Ollama instance. (Default: `http://localhost:11434`)
+- `OLLAMA_MODEL`: The Ollama model to use. (Default: `llama3.2`)
+
+### General Configuration
+- `LANGUAGE`: The language for category generation. `FR` for French (default), `EN` for English. (optional)
 - `ENABLE_UI`: If the user interface should be enabled. (Default: `false`)
 - `FIREFLY_TAG`: The tag to assign to the processed transactions. (Default: `AI categorized`)
 - `PORT`: The port where the application listens. (Default: `3000`)
+
+# Trigger
