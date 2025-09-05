@@ -3,6 +3,7 @@ import {getConfigVariable} from "./util.js";
 export default class FireflyService {
     #BASE_URL;
     #PERSONAL_TOKEN;
+    #DEBUG;
 
     constructor() {
         this.#BASE_URL = getConfigVariable("FIREFLY_URL")
@@ -11,9 +12,22 @@ export default class FireflyService {
         }
 
         this.#PERSONAL_TOKEN = getConfigVariable("FIREFLY_PERSONAL_TOKEN")
+        this.#DEBUG = getConfigVariable("DEBUG", "false") === "true";
+    }
+
+    #debugLog(message, data = null) {
+        if (this.#DEBUG) {
+            const timestamp = new Date().toISOString();
+            console.log(`[DEBUG FireflyService ${timestamp}] ${message}`);
+            if (data) {
+                console.log(`[DEBUG FireflyService ${timestamp}] Data:`, JSON.stringify(data, null, 2));
+            }
+        }
     }
 
     async getCategories() {
+        this.#debugLog("Fetching categories from Firefly III", { url: `${this.#BASE_URL}/api/v1/categories` });
+        
         const response = await fetch(`${this.#BASE_URL}/api/v1/categories`, {
             headers: {
                 Authorization: `Bearer ${this.#PERSONAL_TOKEN}`,
@@ -21,16 +35,20 @@ export default class FireflyService {
         });
 
         if (!response.ok) {
-            throw new FireflyException(response.status, response, await response.text())
+            const errorText = await response.text();
+            this.#debugLog("Error fetching categories", { status: response.status, error: errorText });
+            throw new FireflyException(response.status, response, errorText)
         }
 
         const data = await response.json();
+        this.#debugLog("Categories API response", { data });
 
         const categories = new Map();
         data.data.forEach(category => {
             categories.set(category.attributes.name, category.id);
         });
 
+        this.#debugLog("Categories processed", { count: categories.size, categories: Array.from(categories.keys()) });
         return categories;
     }
 

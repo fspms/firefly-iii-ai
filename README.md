@@ -388,6 +388,48 @@ You can configure the name of this tag by setting the environment variable `FIRE
 
 If you have to run the application on a different port than the default port `3000` set the environment variable `PORT`.
 
+## Debug Mode
+
+The application includes comprehensive debug logging to help troubleshoot issues and monitor the AI processing workflow.
+
+### Enable Debug Mode
+
+Set the `DEBUG` environment variable to `true`:
+
+```yaml
+environment:
+  DEBUG: "true"
+```
+
+### Debug Information
+
+When debug mode is enabled, the application will log detailed information about:
+
+- **Webhook Processing**: Complete webhook payloads and headers
+- **AI Classification**: Input data, prompts, and AI responses
+- **Firefly III API**: All API calls, responses, and errors
+- **Category Management**: Category retrieval, creation, and assignment
+- **Account Management**: Destination account operations
+- **Transaction Processing**: Step-by-step transaction processing
+- **Error Handling**: Detailed error information and stack traces
+
+### Debug Log Format
+
+Debug logs include timestamps and service identification:
+
+```
+[DEBUG 2024-01-15T10:30:45.123Z] Starting AI classification
+[DEBUG FireflyService 2024-01-15T10:30:45.124Z] Fetching categories from Firefly III
+[DEBUG 2024-01-15T10:30:45.125Z] Data: {"categories": ["Food", "Transport"]}
+```
+
+### Use Cases for Debug Mode
+
+- **Troubleshooting**: Identify issues with AI classification or API calls
+- **Development**: Monitor application behavior during development
+- **Monitoring**: Track application performance and AI decision-making
+- **Support**: Provide detailed logs when reporting issues
+
 ## Use Cases and Benefits
 
 ### For Personal Finance Management
@@ -437,6 +479,7 @@ If you have to run the application on a different port than the default port `30
 - `WEBHOOK_URL`: The URL where the webhook will be created. Example: `https://your-domain.com:3000/webhook`. (optional, enables automatic webhook creation)
 - `AUTO_DESTINATION_ACCOUNT`: Whether to automatically suggest destination accounts. `true` or `false` (Default: `false`)
 - `CREATE_DESTINATION_ACCOUNTS`: Whether to automatically create new destination accounts if they don't exist. `true` or `false` (Default: `false`)
+- `DEBUG`: Enable detailed debug logging. `true` or `false` (Default: `false`)
 - `ENABLE_UI`: If the user interface should be enabled. (Default: `false`)
 - `FIREFLY_TAG`: The tag to assign to the processed transactions. (Default: `AI categorized`)
 - `PORT`: The port where the application listens. (Default: `3000`)

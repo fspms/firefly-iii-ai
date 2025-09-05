@@ -15,6 +15,7 @@ export default class App {
   #PROVIDER;
   #AUTO_DESTINATION_ACCOUNT;
   #CREATE_DESTINATION_ACCOUNTS;
+  #DEBUG;
 
   #firefly;
   #aiService;
@@ -33,9 +34,21 @@ export default class App {
     this.#PROVIDER = getConfigVariable("PROVIDER", "openai"); // openai ou ollama
     this.#AUTO_DESTINATION_ACCOUNT = getConfigVariable("AUTO_DESTINATION_ACCOUNT", "false") === "true";
     this.#CREATE_DESTINATION_ACCOUNTS = getConfigVariable("CREATE_DESTINATION_ACCOUNTS", "false") === "true";
+    this.#DEBUG = getConfigVariable("DEBUG", "false") === "true";
+  }
+
+  #debugLog(message, data = null) {
+    if (this.#DEBUG) {
+      const timestamp = new Date().toISOString();
+      console.log(`[DEBUG ${timestamp}] ${message}`);
+      if (data) {
+        console.log(`[DEBUG ${timestamp}] Data:`, JSON.stringify(data, null, 2));
+      }
+    }
   }
 
   async run() {
+    this.#debugLog("Starting application initialization");
     this.#firefly = new FireflyService();
     
     // Initialiser le service IA selon la configuration
@@ -46,6 +59,11 @@ export default class App {
         this.#LANGUAGE
       );
       console.log(`Using Ollama with model: ${getConfigVariable("OLLAMA_MODEL", "llama3.2")}`);
+      this.#debugLog("Ollama service initialized", {
+        baseUrl: getConfigVariable("OLLAMA_BASE_URL", "http://localhost:11434"),
+        model: getConfigVariable("OLLAMA_MODEL", "llama3.2"),
+        language: this.#LANGUAGE
+      });
     } else {
       this.#aiService = new OpenAiService(
         getConfigVariable("OPENAI_API_KEY"),
@@ -53,6 +71,10 @@ export default class App {
         this.#LANGUAGE
       );
       console.log(`Using OpenAI with model: ${getConfigVariable("OPENAI_MODEL", "gpt-3.5-turbo")}`);
+      this.#debugLog("OpenAI service initialized", {
+        model: getConfigVariable("OPENAI_MODEL", "gpt-3.5-turbo"),
+        language: this.#LANGUAGE
+      });
     }
 
     this.#queue = new Queue({
@@ -114,10 +136,21 @@ export default class App {
   #onWebhook(req, res) {
     try {
       console.info("Webhook triggered");
+      this.#debugLog("Webhook received", {
+        body: req.body,
+        headers: req.headers,
+        method: req.method,
+        url: req.url
+      });
       this.#handleWebhook(req, res);
       res.send("Queued");
     } catch (e) {
       console.error(e);
+      this.#debugLog("Webhook error", {
+        error: e.message,
+        stack: e.stack,
+        body: req.body
+      });
       res.status(400).send(e.message);
     }
   }
@@ -176,6 +209,14 @@ export default class App {
     const description = req.body.content.transactions[0].description;
     const type = req.body.content.transactions[0].type;
 
+    this.#debugLog("Processing transaction", {
+      destinationName,
+      description,
+      type,
+      transactionId: req.body.content.id,
+      fullTransaction: req.body.content.transactions[0]
+    });
+
     const job = this.#jobList.createJob({
       destinationName,
       description,
@@ -185,12 +226,27 @@ export default class App {
       try {
         this.#jobList.setJobInProgress(job.id);
 
+        this.#debugLog("Fetching categories and accounts");
         const categories = await this.#firefly.getCategories();
+        this.#debugLog("Categories retrieved", {
+          count: categories.size,
+          categories: Array.from(categories.keys())
+        });
         
         let destinationAccounts = new Map();
         if (this.#AUTO_DESTINATION_ACCOUNT) {
           destinationAccounts = await this.#firefly.getDestinationAccounts();
+          this.#debugLog("Destination accounts retrieved", {
+            count: destinationAccounts.size,
+            accounts: Array.from(destinationAccounts.keys())
+          });
         }
+
+        this.#debugLog("Starting AI classification", {
+          categories: Array.from(categories.keys()),
+          destinationAccounts: Array.from(destinationAccounts.keys()),
+          autoDestinationAccount: this.#AUTO_DESTINATION_ACCOUNT
+        });
 
         const classificationResult = await this.#aiService.classify(
           Array.from(categories.keys()),
@@ -200,6 +256,8 @@ export default class App {
           Array.from(destinationAccounts.keys()),
           this.#AUTO_DESTINATION_ACCOUNT
         );
+
+        this.#debugLog("AI classification completed", classificationResult);
 
         const newData = Object.assign({}, job.data);
         newData.category = classificationResult?.category || null;
@@ -215,13 +273,25 @@ export default class App {
         if (classificationResult?.category) {
           // Catégorie existante trouvée
           categoryId = categories.get(classificationResult.category);
+          this.#debugLog("Using existing category", {
+            category: classificationResult.category,
+            categoryId: categoryId
+          });
         } else if (classificationResult?.suggestedCategory) {
           // Aucune catégorie existante, créer une nouvelle catégorie
           console.log(`Création d'une nouvelle catégorie: ${classificationResult.suggestedCategory}`);
+          this.#debugLog("Creating new category", {
+            suggestedCategory: classificationResult.suggestedCategory
+          });
           categoryId = await this.#firefly.createCategory(classificationResult.suggestedCategory);
           newData.category = classificationResult.suggestedCategory;
+          this.#debugLog("New category created", {
+            category: classificationResult.suggestedCategory,
+            categoryId: categoryId
+          });
         } else {
           console.warn(`Aucune catégorie trouvée pour la transaction: ${destinationName} - ${description}`);
+          this.#debugLog("No category found for transaction");
         }
 
         // Gestion des comptes destinataires
@@ -230,11 +300,22 @@ export default class App {
           if (classificationResult?.destinationAccount) {
             // Compte destinataire existant trouvé
             destinationAccountId = destinationAccounts.get(classificationResult.destinationAccount);
+            this.#debugLog("Using existing destination account", {
+              account: classificationResult.destinationAccount,
+              accountId: destinationAccountId
+            });
           } else if (classificationResult?.suggestedDestinationAccount && this.#CREATE_DESTINATION_ACCOUNTS) {
             // Aucun compte destinataire existant, créer un nouveau compte
             console.log(`Création d'un nouveau compte destinataire: ${classificationResult.suggestedDestinationAccount}`);
+            this.#debugLog("Creating new destination account", {
+              suggestedAccount: classificationResult.suggestedDestinationAccount
+            });
             destinationAccountId = await this.#firefly.createDestinationAccount(classificationResult.suggestedDestinationAccount);
             newData.destinationAccount = classificationResult.suggestedDestinationAccount;
+            this.#debugLog("New destination account created", {
+              account: classificationResult.suggestedDestinationAccount,
+              accountId: destinationAccountId
+            });
           }
         }
 
@@ -262,23 +343,33 @@ export default class App {
 
   async #setupWebhook() {
     try {
+      this.#debugLog("Starting webhook setup");
       const webhookUrl = getConfigVariable("WEBHOOK_URL");
       
       if (!webhookUrl) {
         console.warn("WEBHOOK_URL non configuré. Configuration manuelle requise.");
         console.log("Pour configurer automatiquement le webhook, ajoutez la variable d'environnement WEBHOOK_URL");
         console.log("Exemple: WEBHOOK_URL=https://votre-domaine.com/webhook");
+        this.#debugLog("Webhook setup skipped - no WEBHOOK_URL configured");
         return;
       }
 
+      this.#debugLog("Checking for existing webhooks", { webhookUrl });
       console.log("Vérification des webhooks existants...");
       const existingWebhook = await this.#firefly.checkExistingWebhook(webhookUrl);
       
       if (existingWebhook) {
         console.log("Webhook déjà configuré:", existingWebhook.attributes.title);
+        this.#debugLog("Existing webhook found", {
+          id: existingWebhook.id,
+          title: existingWebhook.attributes.title,
+          url: existingWebhook.attributes.url,
+          active: existingWebhook.attributes.active
+        });
         return;
       }
 
+      this.#debugLog("Creating new webhook", { webhookUrl });
       console.log("Création automatique du webhook...");
       const webhook = await this.#firefly.createWebhook(webhookUrl);
       console.log("Webhook créé avec succès!");
@@ -286,9 +377,20 @@ export default class App {
       console.log(`   - URL: ${webhook.attributes.url}`);
       console.log(`   - Statut: ${webhook.attributes.active ? 'Actif' : 'Inactif'}`);
       
+      this.#debugLog("Webhook created successfully", {
+        id: webhook.id,
+        url: webhook.attributes.url,
+        active: webhook.attributes.active,
+        title: webhook.attributes.title
+      });
+      
     } catch (error) {
       console.error("Erreur lors de la configuration du webhook:", error.message);
       console.log("Configuration manuelle requise. Consultez le README pour les instructions.");
+      this.#debugLog("Webhook setup error", {
+        error: error.message,
+        stack: error.stack
+      });
     }
   }
 }
