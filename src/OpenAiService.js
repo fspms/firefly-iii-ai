@@ -59,7 +59,7 @@ export default class OpenAiService {
             content: prompt
           }
         ],
-        max_tokens: 50,
+        max_tokens: 100,
       });
 
       let guess = response.data.choices[0].message.content;
@@ -134,7 +134,7 @@ ${languageConfig.accountsList}
       return {
         prompt: "I want to categorize transactions on my bank account.",
         instruction: autoDestinationAccount 
-          ? "Output the category name and destination account name separated by '|'. Format: 'Category|Account'. For the account name, use only the company/merchant/entity name (e.g., 'Amazon', 'Generali', 'McDonald's'), not the category + company name."
+          ? "Respond ONLY in the format 'Category|Account' (e.g., 'Food|Intermarché'). For the account name, use only the company/merchant/entity name (e.g., 'Amazon', 'Generali', 'McDonald's'), not the category + company name."
           : "Just output the name of the category. Does not have to be a complete sentence. Ignore any long string of numbers or special characters.",
         subjectLanguage: "The subject is in English.",
         question: `In which category would a transaction (${type}) ${destinationTextEN} with the subject "${description}" fall into?`,
@@ -145,7 +145,7 @@ ${languageConfig.accountsList}
       return {
         prompt: "Je veux catégoriser les transactions de mon compte bancaire.",
         instruction: autoDestinationAccount 
-          ? "Donne le nom de la catégorie et le nom du compte destinataire séparés par '|'. Format: 'Catégorie|Compte'. Pour le nom du compte, utilise seulement le nom de l'entreprise/merchant/entité (ex: 'Amazon', 'Generali', 'McDonald's'), pas la catégorie + nom d'entreprise."
+          ? "Réponds UNIQUEMENT au format 'Catégorie|Compte' (ex: 'Alimentation|Intermarché'). Pour le nom du compte, utilise seulement le nom de l'entreprise/merchant/entité (ex: 'Amazon', 'Generali', 'McDonald's'), pas la catégorie + nom d'entreprise."
           : "Donne simplement le nom de la catégorie. Pas de phrase complète. Ignore toute longue chaîne de chiffres ou de caractères spéciaux.",
         subjectLanguage: "Le sujet est en français.",
         question: `Dans quelle catégorie une transaction (${type}) ${destinationText} avec le sujet "${description}" correspond-elle ?`,
@@ -156,32 +156,56 @@ ${languageConfig.accountsList}
   }
 
   #parseResponse(response, categories, existingAccounts, autoDestinationAccount) {
+    // Nettoyer la réponse des phrases complètes
+    let cleanResponse = response;
+    
+    // Si la réponse contient des phrases complètes, essayer d'extraire le format attendu
+    if (response.includes('correspond à la catégorie') || response.includes('correspond to the category')) {
+      // Chercher le pattern "catégorie" et "compte"
+      const categoryMatch = response.match(/catégorie[^"]*"([^"]+)"/i) || response.match(/category[^"]*"([^"]+)"/i);
+      const accountMatch = response.match(/compte[^"]*"([^"]+)"/i) || response.match(/account[^"]*"([^"]+)"/i);
+      
+      if (categoryMatch && accountMatch) {
+        cleanResponse = `${categoryMatch[1]}|${accountMatch[1]}`;
+      } else if (categoryMatch) {
+        cleanResponse = categoryMatch[1];
+      }
+    }
+    
+    // Si la réponse est tronquée et contient "|", essayer de la compléter
+    if (cleanResponse.includes('|') && !cleanResponse.endsWith('|') && cleanResponse.split('|').length === 1) {
+      // La réponse semble tronquée, traiter comme une catégorie simple
+      cleanResponse = cleanResponse.split('|')[0];
+    }
+
+    this.#debugLog("Cleaned response", { original: response, cleaned: cleanResponse });
+
     if (!autoDestinationAccount) {
       // Mode simple : seulement la catégorie
-      if (categories.indexOf(response) === -1) {
+      if (categories.indexOf(cleanResponse) === -1) {
         return {
           category: null,
-          suggestedCategory: response
+          suggestedCategory: cleanResponse
         };
       }
       return {
-        category: response
+        category: cleanResponse
       };
     }
 
     // Mode avancé : catégorie et compte destinataire
-    const parts = response.split('|');
+    const parts = cleanResponse.split('|');
     if (parts.length !== 2) {
       // Si le format n'est pas correct, traiter comme une catégorie simple
-      if (categories.indexOf(response) === -1) {
+      if (categories.indexOf(cleanResponse) === -1) {
         return {
           category: null,
-          suggestedCategory: response,
+          suggestedCategory: cleanResponse,
           destinationAccount: null
         };
       }
       return {
-        category: response,
+        category: cleanResponse,
         destinationAccount: null
       };
     }
