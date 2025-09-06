@@ -21,13 +21,17 @@ COPY --chown=nodejs:nodejs . .
 
 # Create necessary directories and set permissions
 RUN mkdir -p /app/logs && \
-    chown -R nodejs:nodejs /app
+    chown -R nodejs:nodejs /app/logs
 
 # Switch to non-root user for security
 USER nodejs
 
 # Expose port
 EXPOSE 3000
+
+# Health check using wget (available in Alpine)
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1
 
 # Start the application
 CMD ["node", "index.js"]
