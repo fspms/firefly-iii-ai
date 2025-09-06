@@ -192,11 +192,14 @@ CREATE_DESTINATION_ACCOUNTS: "true"   # Allow creation
 - AI analyzes transaction categories and suggests appropriate budgets
 - Uses intelligent mapping between categories and budgets
 - Only uses existing budgets (no automatic creation)
+- **Note**: Currently logs budget suggestions (Firefly III API for direct budget linking not yet available)
 
 **Configuration**:
 ```yaml
 AUTO_BUDGET: "true"
 ```
+
+**Current Status**: The AI will suggest appropriate budgets based on categories, but direct linking to transactions is not yet implemented due to Firefly III API limitations. Budget suggestions are logged for manual review.
 
 ### Processing Existing Transactions
 
