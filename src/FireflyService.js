@@ -391,16 +391,28 @@ export default class FireflyService {
     async setBudget(transactionId, budgetId) {
         this.#debugLog("Setting budget for transaction", { transactionId, budgetId });
         
-        // Note: Firefly III doesn't have a direct API to link budgets to transactions
-        // Budgets are typically managed through budget limits and rules
-        // This is a placeholder for future implementation when the API becomes available
-        
-        console.warn(`Budget linking not yet implemented in Firefly III API. Budget ${budgetId} would be linked to transaction ${transactionId}`);
-        this.#debugLog("Budget linking skipped - API not available", { transactionId, budgetId });
-        
-        // For now, we'll just log the intended action without throwing an error
-        // This allows the rest of the transaction processing to continue
-        return true;
+        const response = await fetch(`${this.#BASE_URL}/api/v1/transactions/${transactionId}`, {
+            method: "PUT",
+            headers: {
+                Authorization: `Bearer ${this.#PERSONAL_TOKEN}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                transactions: [{
+                    budget_id: budgetId
+                }]
+            })
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            this.#debugLog("Error setting budget", { status: response.status, error: errorText });
+            throw new FireflyException(response.status, response, errorText);
+        }
+
+        await response.json();
+        console.info(`Budget ${budgetId} linked to transaction ${transactionId}`);
+        this.#debugLog("Budget successfully linked", { transactionId, budgetId });
     }
 }
 
