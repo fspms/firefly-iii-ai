@@ -3,7 +3,6 @@ FROM node:20-alpine3.22
 
 # Set environment variables
 ENV NODE_ENV=production
-ENV NODE_OPTIONS="--max-old-space-size=512"
 
 # Create app directory and user for security
 WORKDIR /app
@@ -29,10 +28,6 @@ USER nodejs
 
 # Expose port
 EXPOSE 3000
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD node -e "require('http').get('http://localhost:3000/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) }).on('error', () => process.exit(1))"
 
 # Start the application
 CMD ["node", "index.js"]
