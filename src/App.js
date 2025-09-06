@@ -200,6 +200,10 @@ export default class App {
       this.#express.use("/", express.static("public"));
     }
 
+    this.#express.get("/health", (req, res) => {
+      res.status(200).json({ status: "healthy", timestamp: new Date().toISOString() });
+    });
+    
     this.#express.post("/webhook", this.#onWebhook.bind(this));
     this.#express.post("/process-existing", this.#onProcessExisting.bind(this));
 
