@@ -176,6 +176,33 @@ export default class FireflyService {
         return accounts;
     }
 
+    async getBudgets() {
+        this.#debugLog("Fetching budgets from Firefly III", { url: `${this.#BASE_URL}/api/v1/budgets` });
+        
+        const response = await fetch(`${this.#BASE_URL}/api/v1/budgets`, {
+            headers: {
+                Authorization: `Bearer ${this.#PERSONAL_TOKEN}`,
+            }
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            this.#debugLog("Error fetching budgets", { status: response.status, error: errorText });
+            throw new FireflyException(response.status, response, errorText)
+        }
+
+        const data = await response.json();
+        this.#debugLog("Budgets API response", { data });
+
+        const budgets = new Map();
+        data.data.forEach(budget => {
+            budgets.set(budget.attributes.name, budget.id);
+        });
+
+        this.#debugLog("Budgets processed", { count: budgets.size, budgets: Array.from(budgets.keys()) });
+        return budgets;
+    }
+
     async createDestinationAccount(accountName) {
         const accountData = {
             name: accountName,
@@ -359,6 +386,31 @@ export default class FireflyService {
 
         await response.json();
         console.info("Transaction updated with category and destination account")
+    }
+
+    async setBudget(transactionId, budgetId) {
+        this.#debugLog("Setting budget for transaction", { transactionId, budgetId });
+        
+        const response = await fetch(`${this.#BASE_URL}/api/v1/transactions/${transactionId}/budgets`, {
+            method: "POST",
+            headers: {
+                Authorization: `Bearer ${this.#PERSONAL_TOKEN}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                budget_id: budgetId
+            })
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            this.#debugLog("Error setting budget", { status: response.status, error: errorText });
+            throw new FireflyException(response.status, response, errorText);
+        }
+
+        await response.json();
+        console.info(`Budget ${budgetId} linked to transaction ${transactionId}`);
+        this.#debugLog("Budget successfully linked", { transactionId, budgetId });
     }
 }
 

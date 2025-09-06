@@ -9,13 +9,17 @@ export default class OllamaService {
     this.#language = language;
   }
 
-  async classify(categories, destinationName, description, type) {
+  async classify(categories, destinationName, description, type, existingAccounts = [], autoDestinationAccount = false, budgets = [], autoBudget = false) {
     try {
       const prompt = this.#generatePrompt(
         categories,
         destinationName,
         description,
-        type
+        type,
+        existingAccounts,
+        autoDestinationAccount,
+        budgets,
+        autoBudget
       );
 
       const response = await fetch(`${this.#baseUrl}/api/generate`, {
@@ -44,7 +48,11 @@ export default class OllamaService {
       guess = guess.replace("\n", "");
       guess = guess.trim();
 
-      if (categories.indexOf(guess) === -1) {
+      // Pour l'instant, OllamaService ne supporte que la catégorisation simple
+      // Les fonctionnalités avancées (comptes destinataires et budgets) ne sont pas encore implémentées
+      const category = guess;
+      
+      if (categories.indexOf(category) === -1) {
         console.warn(`Ollama could not classify the transaction. 
                 Prompt: ${prompt}
                 Ollama's guess: ${guess}
@@ -53,14 +61,14 @@ export default class OllamaService {
           prompt,
           response: result.response,
           category: null,
-          suggestedCategory: guess, // Retourner la catégorie suggérée pour création
+          suggestedCategory: category, // Retourner la catégorie suggérée pour création
         };
       }
 
       return {
         prompt,
         response: result.response,
-        category: guess,
+        category: category,
       };
     } catch (error) {
       if (error.response) {
@@ -78,7 +86,7 @@ export default class OllamaService {
     }
   }
 
-  #generatePrompt(categories, destinationName, description, type) {
+  #generatePrompt(categories, destinationName, description, type, existingAccounts = [], autoDestinationAccount = false, budgets = [], autoBudget = false) {
     const languageConfig = this.#getLanguageConfig(destinationName, description, type);
     
     return `

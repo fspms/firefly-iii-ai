@@ -15,6 +15,7 @@ export default class App {
   #PROVIDER;
   #AUTO_DESTINATION_ACCOUNT;
   #CREATE_DESTINATION_ACCOUNTS;
+  #AUTO_BUDGET;
   #DEBUG;
   #TAG_FILTER;
   #TAG_CHECK_INTERVAL;
@@ -37,6 +38,7 @@ export default class App {
     this.#PROVIDER = getConfigVariable("PROVIDER", "openai"); // openai ou ollama
     this.#AUTO_DESTINATION_ACCOUNT = getConfigVariable("AUTO_DESTINATION_ACCOUNT", "false") === "true";
     this.#CREATE_DESTINATION_ACCOUNTS = getConfigVariable("CREATE_DESTINATION_ACCOUNTS", "false") === "true";
+    this.#AUTO_BUDGET = getConfigVariable("AUTO_BUDGET", "false") === "true";
     this.#DEBUG = getConfigVariable("DEBUG", "false") === "true";
     this.#TAG_FILTER = getConfigVariable("TAG_FILTER", "");
     this.#TAG_CHECK_INTERVAL = parseInt(getConfigVariable("TAG_CHECK_INTERVAL", "0"));
@@ -361,10 +363,21 @@ export default class App {
           });
         }
 
+        let budgets = new Map();
+        if (this.#AUTO_BUDGET) {
+          budgets = await this.#firefly.getBudgets();
+          this.#debugLog("Budgets retrieved", {
+            count: budgets.size,
+            budgets: Array.from(budgets.keys())
+          });
+        }
+
         this.#debugLog("Starting AI classification", {
           categories: Array.from(categories.keys()),
           destinationAccounts: Array.from(destinationAccounts.keys()),
-          autoDestinationAccount: this.#AUTO_DESTINATION_ACCOUNT
+          autoDestinationAccount: this.#AUTO_DESTINATION_ACCOUNT,
+          budgets: Array.from(budgets.keys()),
+          autoBudget: this.#AUTO_BUDGET
         });
 
         const classificationResult = await this.#aiService.classify(
@@ -373,7 +386,9 @@ export default class App {
           description,
           type,
           Array.from(destinationAccounts.keys()),
-          this.#AUTO_DESTINATION_ACCOUNT
+          this.#AUTO_DESTINATION_ACCOUNT,
+          Array.from(budgets.keys()),
+          this.#AUTO_BUDGET
         );
 
         this.#debugLog("AI classification completed", classificationResult);
@@ -384,6 +399,8 @@ export default class App {
         newData.response = classificationResult?.response || null;
         newData.destinationAccount = classificationResult?.destinationAccount || null;
         newData.suggestedDestinationAccount = classificationResult?.suggestedDestinationAccount || null;
+        newData.budget = classificationResult?.budget || null;
+        newData.suggestedBudget = classificationResult?.suggestedBudget || null;
 
         this.#jobList.updateJobData(job.id, newData);
 
@@ -438,6 +455,16 @@ export default class App {
           }
         }
 
+        // Gestion des budgets
+        let budgetId = null;
+        if (this.#AUTO_BUDGET && classificationResult?.budget) {
+          budgetId = budgets.get(classificationResult.budget);
+          this.#debugLog("Using existing budget", {
+            budget: classificationResult.budget,
+            budgetId: budgetId
+          });
+        }
+
         // Appliquer les modifications à la transaction
         if (categoryId || destinationAccountId) {
           await this.#firefly.setCategoryAndDestination(
@@ -446,6 +473,11 @@ export default class App {
             categoryId,
             destinationAccountId
           );
+        }
+
+        // Lier le budget à la transaction
+        if (budgetId) {
+          await this.#firefly.setBudget(req.body.content.id, budgetId);
         }
 
         // Mettre à jour les données du job
@@ -569,6 +601,11 @@ export default class App {
         destinationAccounts = await this.#firefly.getDestinationAccounts();
       }
 
+      let budgets = new Map();
+      if (this.#AUTO_BUDGET) {
+        budgets = await this.#firefly.getBudgets();
+      }
+
       // Classification IA
       const classificationResult = await this.#aiService.classify(
         Array.from(categories.keys()),
@@ -576,7 +613,9 @@ export default class App {
         description,
         type,
         Array.from(destinationAccounts.keys()),
-        this.#AUTO_DESTINATION_ACCOUNT
+        this.#AUTO_DESTINATION_ACCOUNT,
+        Array.from(budgets.keys()),
+        this.#AUTO_BUDGET
       );
 
       this.#debugLog("AI classification completed for existing transaction", classificationResult);
@@ -623,6 +662,16 @@ export default class App {
         }
       }
 
+      // Gestion des budgets
+      let budgetId = null;
+      if (this.#AUTO_BUDGET && classificationResult?.budget) {
+        budgetId = budgets.get(classificationResult.budget);
+        this.#debugLog("Using existing budget for existing transaction", {
+          budget: classificationResult.budget,
+          budgetId: budgetId
+        });
+      }
+
       // Appliquer les modifications à la transaction
       if (categoryId || destinationAccountId) {
         await this.#firefly.setCategoryAndDestination(
@@ -632,6 +681,12 @@ export default class App {
           destinationAccountId
         );
         console.log(`Transaction ${transaction.id} mise à jour avec succès`);
+      }
+
+      // Lier le budget à la transaction
+      if (budgetId) {
+        await this.#firefly.setBudget(transaction.id, budgetId);
+        console.log(`Budget ${budgetId} lié à la transaction ${transaction.id}`);
       }
 
       // Supprimer le tag après traitement pour éviter les boucles

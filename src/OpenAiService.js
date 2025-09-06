@@ -27,7 +27,7 @@ export default class OpenAiService {
     }
   }
 
-  async classify(categories, destinationName, description, type, existingAccounts = [], autoDestinationAccount = false) {
+  async classify(categories, destinationName, description, type, existingAccounts = [], autoDestinationAccount = false, budgets = [], autoBudget = false) {
     try {
       this.#debugLog("Starting AI classification", {
         destinationName,
@@ -35,7 +35,9 @@ export default class OpenAiService {
         type,
         categoriesCount: categories.length,
         existingAccountsCount: existingAccounts.length,
-        autoDestinationAccount
+        autoDestinationAccount,
+        budgetsCount: budgets.length,
+        autoBudget
       });
 
       const prompt = this.#generatePrompt(
@@ -44,7 +46,9 @@ export default class OpenAiService {
         description,
         type,
         existingAccounts,
-        autoDestinationAccount
+        autoDestinationAccount,
+        budgets,
+        autoBudget
       );
 
       this.#debugLog("Generated prompt", { prompt });
@@ -66,8 +70,8 @@ export default class OpenAiService {
 
       this.#debugLog("AI response received", { guess });
 
-      // Parse the response to extract category and destination account
-      const result = this.#parseResponse(guess, categories, existingAccounts, autoDestinationAccount);
+      // Parse the response to extract category, destination account and budget
+      const result = this.#parseResponse(guess, categories, existingAccounts, autoDestinationAccount, budgets, autoBudget);
 
       this.#debugLog("Parsed result", result);
 
@@ -98,8 +102,8 @@ export default class OpenAiService {
     }
   }
 
-  #generatePrompt(categories, destinationName, description, type, existingAccounts = [], autoDestinationAccount = false) {
-    const languageConfig = this.#getLanguageConfig(destinationName, description, type, existingAccounts, autoDestinationAccount);
+  #generatePrompt(categories, destinationName, description, type, existingAccounts = [], autoDestinationAccount = false, budgets = [], autoBudget = false) {
+    const languageConfig = this.#getLanguageConfig(destinationName, description, type, existingAccounts, autoDestinationAccount, budgets, autoBudget);
     
     let prompt = `
 ${languageConfig.prompt}
@@ -119,10 +123,18 @@ ${languageConfig.accountsList}
 `;
     }
 
+    if (autoBudget && budgets.length > 0) {
+      prompt += `
+
+${languageConfig.budgetInstruction}
+${languageConfig.budgetsList}
+`;
+    }
+
     return prompt;
   }
 
-  #getLanguageConfig(destinationName, description, type, existingAccounts = [], autoDestinationAccount = false) {
+  #getLanguageConfig(destinationName, description, type, existingAccounts = [], autoDestinationAccount = false, budgets = [], autoBudget = false) {
     // Gérer le cas où destinationName est null ou "(unknown destination account)"
     const hasValidDestination = destinationName && destinationName !== "(unknown destination account)";
     const destinationText = hasValidDestination ? `de "${destinationName}"` : "";
@@ -131,59 +143,73 @@ ${languageConfig.accountsList}
     if (this.#language === "EN") {
       return {
         prompt: "I want to categorize transactions on my bank account.",
-        instruction: autoDestinationAccount 
-          ? "Respond ONLY in the following JSON format:\n{\n  \"category\": \"Category name\",\n  \"destinationAccount\": \"Account name\"\n}\nFor the account name, use only the company/merchant/entity name (e.g., 'Amazon', 'Generali', 'McDonald's'), not the category + company name."
-          : "Respond ONLY in the following JSON format:\n{\n  \"category\": \"Category name\"\n}\nJust output the name of the category. Does not have to be a complete sentence. Ignore any long string of numbers or special characters.",
+        instruction: this.#buildInstruction(autoDestinationAccount, autoBudget),
         subjectLanguage: "The subject is in English.",
         question: `In which category would a transaction (${type}) ${destinationTextEN} with the subject "${description}" fall into?`,
         accountInstruction: autoDestinationAccount ? "Also suggest the most appropriate destination account from the list below, or suggest a new account name if none match. Use only the company/merchant name:" : "",
-        accountsList: autoDestinationAccount ? existingAccounts.join(", ") : ""
+        accountsList: autoDestinationAccount ? existingAccounts.join(", ") : "",
+        budgetInstruction: autoBudget ? "Also suggest the most appropriate budget from the list below based on the category. Use only the budget name:" : "",
+        budgetsList: autoBudget ? budgets.join(", ") : ""
       };
     } else { // FR (default)
       return {
         prompt: "Je veux catégoriser les transactions de mon compte bancaire.",
-        instruction: autoDestinationAccount 
-          ? "Réponds UNIQUEMENT au format JSON suivant:\n{\n  \"category\": \"Nom de la catégorie\",\n  \"destinationAccount\": \"Nom du compte destinataire\"\n}\nPour le nom du compte, utilise seulement le nom de l'entreprise/merchant/entité (ex: 'Amazon', 'Generali', 'McDonald's'), pas la catégorie + nom d'entreprise."
-          : "Réponds UNIQUEMENT au format JSON suivant:\n{\n  \"category\": \"Nom de la catégorie\"\n}\nDonne simplement le nom de la catégorie. Pas de phrase complète. Ignore toute longue chaîne de chiffres ou de caractères spéciaux.",
+        instruction: this.#buildInstruction(autoDestinationAccount, autoBudget),
         subjectLanguage: "Le sujet est en français.",
         question: `Dans quelle catégorie une transaction (${type}) ${destinationText} avec le sujet "${description}" correspond-elle ?`,
         accountInstruction: autoDestinationAccount ? "Suggère aussi le compte destinataire le plus approprié dans la liste ci-dessous, ou suggère un nouveau nom de compte si aucun ne correspond. Utilise seulement le nom de l'entreprise/merchant:" : "",
-        accountsList: autoDestinationAccount ? existingAccounts.join(", ") : ""
+        accountsList: autoDestinationAccount ? existingAccounts.join(", ") : "",
+        budgetInstruction: autoBudget ? "Suggère aussi le budget le plus approprié dans la liste ci-dessous basé sur la catégorie. Utilise seulement le nom du budget:" : "",
+        budgetsList: autoBudget ? budgets.join(", ") : ""
       };
     }
   }
 
-  #parseResponse(response, categories, existingAccounts, autoDestinationAccount) {
-    this.#debugLog("Parsing AI response", { response, autoDestinationAccount });
+  #buildInstruction(autoDestinationAccount, autoBudget) {
+    const fields = ['"category": "Category name"'];
+    
+    if (autoDestinationAccount) {
+      fields.push('"destinationAccount": "Account name"');
+    }
+    
+    if (autoBudget) {
+      fields.push('"budget": "Budget name"');
+    }
+    
+    const jsonFormat = `{\n  ${fields.join(',\n  ')}\n}`;
+    
+    if (this.#language === "EN") {
+      return `Respond ONLY in the following JSON format:\n${jsonFormat}\nFor the account name, use only the company/merchant/entity name (e.g., 'Amazon', 'Generali', 'McDonald's'), not the category + company name. For the budget, choose the most appropriate budget based on the category.`;
+    } else {
+      return `Réponds UNIQUEMENT au format JSON suivant:\n${jsonFormat}\nPour le nom du compte, utilise seulement le nom de l'entreprise/merchant/entité (ex: 'Amazon', 'Generali', 'McDonald's'), pas la catégorie + nom d'entreprise. Pour le budget, choisis le budget le plus approprié basé sur la catégorie.`;
+    }
+  }
+
+  #parseResponse(response, categories, existingAccounts, autoDestinationAccount, budgets = [], autoBudget = false) {
+    this.#debugLog("Parsing AI response", { response, autoDestinationAccount, autoBudget });
 
     try {
       // Essayer de parser le JSON directement
       const jsonResponse = JSON.parse(response);
       
-      if (!autoDestinationAccount) {
-        // Mode simple : seulement la catégorie
-        const category = jsonResponse.category;
-        if (categories.indexOf(category) === -1) {
-          return {
-            category: null,
-            suggestedCategory: category
-          };
-        }
-        return {
-          category: category
-        };
-      }
-
-      // Mode avancé : catégorie et compte destinataire
       const category = jsonResponse.category;
       const destinationAccount = jsonResponse.destinationAccount;
+      const budget = jsonResponse.budget;
       
       const result = {
         category: categories.indexOf(category) !== -1 ? category : null,
-        suggestedCategory: categories.indexOf(category) === -1 ? category : null,
-        destinationAccount: existingAccounts.indexOf(destinationAccount) !== -1 ? destinationAccount : null,
-        suggestedDestinationAccount: existingAccounts.indexOf(destinationAccount) === -1 ? destinationAccount : null
+        suggestedCategory: categories.indexOf(category) === -1 ? category : null
       };
+
+      if (autoDestinationAccount) {
+        result.destinationAccount = existingAccounts.indexOf(destinationAccount) !== -1 ? destinationAccount : null;
+        result.suggestedDestinationAccount = existingAccounts.indexOf(destinationAccount) === -1 ? destinationAccount : null;
+      }
+
+      if (autoBudget) {
+        result.budget = budgets.indexOf(budget) !== -1 ? budget : null;
+        result.suggestedBudget = budgets.indexOf(budget) === -1 ? budget : null;
+      }
 
       return result;
     } catch (jsonError) {
@@ -198,28 +224,26 @@ ${languageConfig.accountsList}
         try {
           const jsonResponse = JSON.parse(jsonMatch[0]);
           
-          if (!autoDestinationAccount) {
-            const category = jsonResponse.category;
-            if (categories.indexOf(category) === -1) {
-              return {
-                category: null,
-                suggestedCategory: category
-              };
-            }
-            return {
-              category: category
-            };
-          }
-
           const category = jsonResponse.category;
           const destinationAccount = jsonResponse.destinationAccount;
+          const budget = jsonResponse.budget;
           
-          return {
+          const result = {
             category: categories.indexOf(category) !== -1 ? category : null,
-            suggestedCategory: categories.indexOf(category) === -1 ? category : null,
-            destinationAccount: existingAccounts.indexOf(destinationAccount) !== -1 ? destinationAccount : null,
-            suggestedDestinationAccount: existingAccounts.indexOf(destinationAccount) === -1 ? destinationAccount : null
+            suggestedCategory: categories.indexOf(category) === -1 ? category : null
           };
+
+          if (autoDestinationAccount) {
+            result.destinationAccount = existingAccounts.indexOf(destinationAccount) !== -1 ? destinationAccount : null;
+            result.suggestedDestinationAccount = existingAccounts.indexOf(destinationAccount) === -1 ? destinationAccount : null;
+          }
+
+          if (autoBudget) {
+            result.budget = budgets.indexOf(budget) !== -1 ? budget : null;
+            result.suggestedBudget = budgets.indexOf(budget) === -1 ? budget : null;
+          }
+
+          return result;
         } catch (fallbackError) {
           this.#debugLog("Fallback JSON parsing also failed", { 
             error: fallbackError.message,
@@ -231,36 +255,44 @@ ${languageConfig.accountsList}
       // Dernier recours : traiter comme du texte simple
       const cleanResponse = response.trim();
       
-      if (!autoDestinationAccount) {
-        if (categories.indexOf(cleanResponse) === -1) {
-          return {
-            category: null,
-            suggestedCategory: cleanResponse
-          };
-        }
-        return {
-          category: cleanResponse
-        };
-      }
-
       // Mode avancé avec texte simple - essayer de séparer par "|"
       const parts = cleanResponse.split('|');
-      if (parts.length === 2) {
-        const [category, account] = parts.map(part => part.trim());
-        return {
+      if (parts.length >= 2) {
+        const [category, account, budget] = parts.map(part => part.trim());
+        
+        const result = {
           category: categories.indexOf(category) !== -1 ? category : null,
-          suggestedCategory: categories.indexOf(category) === -1 ? category : null,
-          destinationAccount: existingAccounts.indexOf(account) !== -1 ? account : null,
-          suggestedDestinationAccount: existingAccounts.indexOf(account) === -1 ? account : null
+          suggestedCategory: categories.indexOf(category) === -1 ? category : null
         };
+
+        if (autoDestinationAccount && account) {
+          result.destinationAccount = existingAccounts.indexOf(account) !== -1 ? account : null;
+          result.suggestedDestinationAccount = existingAccounts.indexOf(account) === -1 ? account : null;
+        }
+
+        if (autoBudget && budget) {
+          result.budget = budgets.indexOf(budget) !== -1 ? budget : null;
+          result.suggestedBudget = budgets.indexOf(budget) === -1 ? budget : null;
+        }
+
+        return result;
       }
 
       // Si pas de séparateur, traiter comme une catégorie simple
-      return {
+      const result = {
         category: categories.indexOf(cleanResponse) !== -1 ? cleanResponse : null,
-        suggestedCategory: categories.indexOf(cleanResponse) === -1 ? cleanResponse : null,
-        destinationAccount: null
+        suggestedCategory: categories.indexOf(cleanResponse) === -1 ? cleanResponse : null
       };
+
+      if (autoDestinationAccount) {
+        result.destinationAccount = null;
+      }
+
+      if (autoBudget) {
+        result.budget = null;
+      }
+
+      return result;
     }
   }
 }
