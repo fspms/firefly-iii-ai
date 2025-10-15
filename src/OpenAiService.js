@@ -53,7 +53,20 @@ export default class OpenAiService {
 
       this.#debugLog("Generated prompt", { prompt });
 
-      const response = await this.#openAi.chat.completions.create({
+      let response;
+      if (this.#usesNewMaxCompletionTokens()) {
+        response = await this.#openAi.chat.completions.create({
+        model: this.#model,
+        messages: [
+          {
+            role: "user",
+            content: prompt
+          }
+        ],
+        max_completion_tokens: 150,
+      });
+      } else {
+        response = await this.#openAi.chat.completions.create({
         model: this.#model,
         messages: [
           {
@@ -63,6 +76,7 @@ export default class OpenAiService {
         ],
         max_tokens: 150,
       });
+      }
 
       let guess = response.choices[0].message.content;
       guess = guess.replace("\n", "");
@@ -132,6 +146,16 @@ ${languageConfig.budgetsList}
     }
 
     return prompt;
+  }
+
+  #usesNewMaxCompletionTokens(){
+    const normalizedModel = this.#model.toLowerCase();
+    return (
+      normalizedModel.startsWith("gpt-5") ||
+      normalizedModel.startsWith("o") ||
+      normalizedModel.startsWith("gpt-4.1") ||
+      normalizedModel.startsWith("gpt-4o")
+    )
   }
 
   #getLanguageConfig(destinationName, description, type, existingAccounts = [], autoDestinationAccount = false, budgets = [], autoBudget = false) {
