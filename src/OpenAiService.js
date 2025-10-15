@@ -63,7 +63,7 @@ export default class OpenAiService {
             content: prompt
           }
         ],
-        max_completion_tokens: 150,
+        max_completion_tokens: 1500,
       });
       } else {
         response = await this.#openAi.chat.completions.create({
